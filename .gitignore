@@ -1,3 +1,14 @@
+# Local development scripts and batch files
+scripts/
+*.bat
+*.cmd
+*.ps1
+
+# Windows Executables and packages
+*.exe
+*.dll
+*.zip
+
 # Android build outputs and caches
 .gradle/
 build/
