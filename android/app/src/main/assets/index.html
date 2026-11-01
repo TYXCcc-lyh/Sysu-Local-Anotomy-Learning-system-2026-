@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>中山大学《局部解剖学》数字化交互学习系统</title>
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="局部解剖学">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Topbar Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="logo-area">
+        <div class="logo-badge">SYSU</div>
+        <div class="logo-text">
+          <h1>局部解剖学数字化交互学习系统 <span class="sub-tag">中山大学讲义</span></h1>
+          <span>Regional Anatomy Interactive Suite · 基础闪卡 · 思维导图 · 题库测评 · 临床病例</span>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <div class="search-box">
+          <span class="search-icon">
+            <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </span>
+          <input type="text" id="globalSearchInput" placeholder="全局检索考点、导图结构、题目、病例或名词...">
+        </div>
+        <button class="btn-icon" id="themeToggleBtn" title="切换深色/浅色模式">
+          <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Bar -->
+  <nav class="sub-nav">
+    <div class="nav-container">
+      <div class="nav-tabs">
+        <button class="nav-tab active" data-view="anki">
+          <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          <span>基础精要闪卡</span>
+        </button>
+        <button class="nav-tab" data-view="mindmap">
+          <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>
+          <span>知识思维导图</span>
+        </button>
+        <button class="nav-tab" data-view="quiz">
+          <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <span>题库测评系统</span>
+        </button>
+        <button class="nav-tab" data-view="cases">
+          <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+          <span>临床病例分析</span>
+        </button>
+        <button class="nav-tab" data-view="errors">
+          <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+          <span>智能错题本</span>
+          <span class="tab-badge" id="badgeErrorCount" style="display:none;">0</span>
+        </button>
+        <button class="nav-tab" data-view="favorites">
+          <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          <span>重点收藏夹</span>
+          <span class="tab-badge gold" id="badgeStarredCount" style="display:none;">0</span>
+        </button>
+        <button class="nav-tab" data-view="stats">
+          <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+          <span>学习数据中心</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Chapter Filter Bar -->
+  <div class="chapter-bar">
+    <div class="chapter-inner" id="chapterPillsContainer">
+      <span class="ch-label">章节分类:</span>
+      <button class="ch-pill active" data-ch="全部">全部章节</button>
+      <button class="ch-pill" data-ch="下肢">下肢</button>
+      <button class="ch-pill" data-ch="上肢">上肢</button>
+      <button class="ch-pill" data-ch="头部">头部</button>
+      <button class="ch-pill" data-ch="颈部">颈部</button>
+      <button class="ch-pill" data-ch="胸部">胸部</button>
+      <button class="ch-pill" data-ch="腹部">腹部</button>
+      <button class="ch-pill" data-ch="盆部和会阴">盆部与会阴</button>
+      <button class="ch-pill" data-ch="背部">背部（脊柱区）</button>
+    </div>
+  </div>
+
+  <!-- Main View Sections -->
+  <main class="main-content">
+
+    <!-- VIEW 1: ANKI FLASHCARDS -->
+    <section class="view-section active" id="view-anki">
+      <div class="anki-container">
+        <!-- Progress Bar -->
+        <div class="anki-header">
+          <div class="anki-progress-box">
+            <span style="font-size:0.85rem; font-weight:700; color:var(--text-muted);">掌握进度</span>
+            <div class="progress-track">
+              <div class="progress-fill" id="ankiProgressFill" style="width:0%;"></div>
+            </div>
+            <span style="font-size:0.85rem; font-weight:700; color:var(--primary);" id="ankiProgressText">0%</span>
+          </div>
+        </div>
+
+        <!-- 3D Flashcard Stage -->
+        <div class="card-stage" id="ankiStage">
+          <div class="flashcard" id="ankiFlashcard">
+            <!-- Front Face -->
+            <div class="card-face card-front">
+              <div class="card-face-header">
+                <span class="card-tag" id="ankiCardTag">章节考点</span>
+                <span class="card-hint" id="ankiCardHint">卡片 1 / 264</span>
+              </div>
+              <div class="card-body">
+                <h2 class="card-title" id="ankiCardTitle">考点名称</h2>
+                <div class="card-prompt" id="ankiCardPrompt">记忆引导问题...</div>
+              </div>
+              <div class="card-flip-prompt">
+                <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                <span>点击卡片或按空格键 [Space] 翻转查看答案</span>
+              </div>
+            </div>
+
+            <!-- Back Face -->
+            <div class="card-face card-back">
+              <div class="card-face-header">
+                <span class="card-tag" style="background:var(--success-light); color:var(--success);">核心解剖解析</span>
+                <span class="card-hint">再次点击翻回正面</span>
+              </div>
+              <div class="card-body">
+                <div class="card-answer-text" id="ankiCardAnswer">标准解剖要点与毗邻结构...</div>
+                <div class="card-clinical-box" id="ankiClinicalBox" style="display:none;">
+                  <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.35rem;">
+                    <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                    <b>临床应用与易混辨析：</b>
+                  </div>
+                  <span id="ankiClinicalText"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anki Navigation & Spaced Repetition Buttons -->
+        <div class="anki-controls">
+          <div class="anki-nav-btns">
+            <button class="btn-nav" id="btnAnkiPrev" title="上一张 (←)">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+              上一张
+            </button>
+            <button class="btn-nav" id="btnAnkiFlip">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+              翻转卡片 (空格)
+            </button>
+            <button class="btn-nav" id="btnAnkiNext" title="下一张 (→)">
+              下一张
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </button>
+          </div>
+
+          <div class="anki-rating-btns">
+            <button class="btn-rate btn-again" id="btnRateAgain" title="快捷键: 1">
+              <span>生疏 (1)</span>
+            </button>
+            <button class="btn-rate btn-good" id="btnRateGood" title="快捷键: 2">
+              <span>复习 (2)</span>
+            </button>
+            <button class="btn-rate btn-easy" id="btnRateEasy" title="快捷键: 3">
+              <span>掌握 (3)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 2: MIND MAP -->
+    <section class="view-section" id="view-mindmap">
+      <div class="mindmap-layout">
+        <!-- Tree View -->
+        <div class="mindmap-tree-container">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; padding-bottom:0.75rem; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:0.5rem;">
+            <div>
+              <h2 style="font-size:1.15rem; font-weight:700; margin:0;">局部解剖学整体知识架构图谱</h2>
+              <span style="font-size:0.82rem; color:var(--text-muted);">涵盖八大解剖分区 · 264张精要闪卡考点100%映射入网 · 支持点击展开折叠与双向考点联动</span>
+            </div>
+            <div style="display:flex; gap:0.5rem;">
+              <button class="btn-nav" id="btnMmExpandAll">全部展开</button>
+              <button class="btn-nav" id="btnMmCollapseAll">全部折叠</button>
+            </div>
+          </div>
+          <div id="mindmapTree"></div>
+        </div>
+
+        <!-- Inspector Panel -->
+        <div class="mindmap-inspector" id="inspectorPanel">
+          <div class="inspector-header">
+            <div class="card-tag" style="margin-bottom:0.5rem;">结构精析联动</div>
+            <h3 class="inspector-title" id="inspectorTitle">点击左侧结构节点</h3>
+          </div>
+          <p class="inspector-desc" id="inspectorDesc">在思维导图中选择任意解剖区域、三角、裂孔、间隙或神经血管鞘，即可在此快速浏览其解剖组成、毗邻要点，并一键联动对应基础闪卡或题目测评。</p>
+          <div class="inspector-actions" id="inspectorActions"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: QUIZ & TESTING -->
+    <section class="view-section" id="view-quiz">
+      <!-- Quiz Toolbar Filter -->
+      <div class="quiz-header-bar">
+        <div class="filter-group">
+          <span style="font-size:0.85rem; font-weight:700; color:var(--text-muted); margin-right:0.25rem;">题型:</span>
+          <button class="filter-btn active" data-qtype="all">全部题型</button>
+          <button class="filter-btn" data-qtype="A">A型题 (单选)</button>
+          <button class="filter-btn" data-qtype="X">X型题 (多选)</button>
+        </div>
+
+        <div class="filter-group">
+          <span style="font-size:0.85rem; font-weight:700; color:var(--text-muted); margin-right:0.25rem;">状态:</span>
+          <button class="filter-btn active" data-qstatus="all">全部</button>
+          <button class="filter-btn" data-qstatus="unanswered">未答</button>
+          <button class="filter-btn" data-qstatus="wrong">做错</button>
+          <button class="filter-btn" data-qstatus="correct">已正确</button>
+          <button class="filter-btn" data-qstatus="starred">已收藏</button>
+        </div>
+
+        <div class="quiz-stats-badge" id="quizStatsBadge">加载题目中...</div>
+      </div>
+
+      <!-- Questions List Container -->
+      <div class="questions-list" id="quizQuestionsList"></div>
+
+      <!-- Pagination Controls -->
+      <div class="pagination-bar" id="quizPaginationBar"></div>
+    </section>
+
+    <!-- VIEW 4: CLINICAL CASES -->
+    <section class="view-section" id="view-cases">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; flex-wrap:wrap; gap:1rem;">
+        <div>
+          <h2 style="font-size:1.35rem; font-weight:700;">临床病例综合分析 (Clinical Case Studies)</h2>
+          <p style="font-size:0.85rem; color:var(--text-muted);">紧密围绕人卫第十版教材章末「临床病例分析」与中山医历年真题，点击展开权威解剖诊断、机制推演与临床要点提炼。</p>
+        </div>
+        <div class="quiz-stats-badge" id="casesStatsBadge">共 123 个病例</div>
+      </div>
+
+      <!-- Case Filter Toolbar -->
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; flex-wrap:wrap; background:var(--bg-card); padding:0.75rem 1.25rem; border-radius:var(--radius-md); border:1px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+          <span style="font-size:0.85rem; font-weight:700; color:var(--text-muted); margin-right:0.25rem;">病例题库类型：</span>
+          <button class="filter-btn active" id="caseFilterAll" onclick="window.APP.setCaseFilter('all')">
+            全部临床病例 (123)
+          </button>
+          <button class="filter-btn" id="caseFilter10th" onclick="window.APP.setCaseFilter('10th')" style="border-color:#38bdf8; color:#0284c7; font-weight:600;">
+            <svg class="svg-icon" style="width:13px;height:13px;display:inline-block;vertical-align:-1px;margin-right:4px;" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            人卫第十版教材考题 (97 · 考试命题源)
+          </button>
+          <button class="filter-btn" id="caseFilterStarred" onclick="window.APP.setCaseFilter('starred')">
+            已收藏病例
+          </button>
+        </div>
+        <div style="font-size:0.82rem; color:var(--text-muted);">
+          提示：期末与阶段考重点考察「第十版教材考题」
+        </div>
+      </div>
+
+      <div class="cases-grid" id="casesList"></div>
+    </section>
+
+    <!-- VIEW 5: ERROR BOOK -->
+    <section class="view-section" id="view-errors">
+      <div class="quiz-header-bar">
+        <div>
+          <h2 style="font-size:1.25rem; font-weight:700; color:var(--danger); display:flex; align-items:center; gap:0.5rem;">
+            <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+            <span>智能错题本</span>
+          </h2>
+          <span style="font-size:0.85rem; color:var(--text-muted);">自动收录所有做错的单选题与多选题，支持针对性攻克与逐题移出。</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:1rem;">
+          <div class="quiz-stats-badge" id="errorsStatsBadge">0 道错题</div>
+          <button class="btn-nav" id="btnClearErrorsBtn" style="color:var(--danger);">清空错题本</button>
+        </div>
+      </div>
+
+      <div class="questions-list" id="errorsQuestionsList"></div>
+    </section>
+
+    <!-- VIEW 6: FAVORITES -->
+    <section class="view-section" id="view-favorites">
+      <div class="quiz-header-bar">
+        <div>
+          <h2 style="font-size:1.25rem; font-weight:700; color:var(--warning); display:flex; align-items:center; gap:0.5rem;">
+            <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            <span>重点题目收藏夹</span>
+          </h2>
+          <span style="font-size:0.85rem; color:var(--text-muted);">集中复习标记为星标的重要考点题目与经典综合题。</span>
+        </div>
+        <div class="quiz-stats-badge" id="favsStatsBadge">0 道收藏</div>
+      </div>
+
+      <div class="questions-list" id="favoritesQuestionsList"></div>
+    </section>
+
+    <!-- VIEW 7: STATS & DASHBOARD -->
+    <section class="view-section" id="view-stats">
+      <h2 style="font-size:1.35rem; font-weight:700; margin-bottom:1.25rem;">学习数据与档案管理</h2>
+
+      <div class="dash-grid">
+        <div class="stat-card">
+          <div class="stat-icon icon-blue">
+            <svg class="svg-icon icon-md" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+          </div>
+          <div class="stat-info">
+            <h4 id="statDoneCount">0</h4>
+            <p>已测评题目数</p>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon icon-green">
+            <svg class="svg-icon icon-md" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+          <div class="stat-info">
+            <h4 id="statAccuracy">0%</h4>
+            <p>整体答题正确率</p>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon icon-gold">
+            <svg class="svg-icon icon-md" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          </div>
+          <div class="stat-info">
+            <h4 id="statMasteredCards">0 / 264</h4>
+            <p>熟练掌握核心考点</p>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon icon-red">
+            <svg class="svg-icon icon-md" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+          </div>
+          <div class="stat-info">
+            <h4 id="statErrorCount">0</h4>
+            <p>当前错题总数</p>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon icon-gold">
+            <svg class="svg-icon icon-md" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          </div>
+          <div class="stat-info">
+            <h4 id="statFavCount">0</h4>
+            <p>重点收藏题目</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="q-card" style="margin-top:1.5rem;">
+        <h3 style="font-size:1.15rem; font-weight:700; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
+          <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+          学习档案与数据备份
+        </h3>
+        <p style="font-size:0.9rem; color:var(--text-muted); line-height:1.6; margin-bottom:1.25rem;">
+          你的所有测评进度、错题记录、收藏题目和考点掌握情况均实时保存在当前环境的本地存储（LocalStorage）中。若更换设备或重装系统，可在此一键备份与恢复数据。
+        </p>
+
+        <div class="backup-actions">
+          <button class="btn-nav" id="btnExportData" style="background:var(--primary); color:#fff; border-color:var(--primary);">
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            导出学习档案 (JSON)
+          </button>
+          <button class="btn-nav" id="btnImportData">
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            导入学习档案 (JSON)
+          </button>
+          <input type="file" id="fileImportInput" accept=".json" style="display:none;">
+          <button class="btn-nav" id="btnResetData" style="color:var(--danger); border-color:var(--danger-border); margin-left:auto;">
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            重置所有学习记录
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Knowledge Preview Modal (Linked from questions & mindmap) -->
+  <div class="modal-overlay" id="knowledgeModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modalKnowledgeTitle">考点知识解析</h3>
+        <button class="modal-close" id="modalCloseBtn">✕</button>
+      </div>
+      <div class="modal-body" id="modalKnowledgeBody"></div>
+      <div style="padding:1rem 1.5rem; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:0.75rem; background:var(--bg-subtle);">
+        <button class="btn-nav" onclick="document.getElementById('modalCloseBtn').click()">关闭</button>
+        <button class="btn-nav" id="modalGoAnkiBtn" style="background:var(--primary); color:#fff; border-color:var(--primary);">
+          <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          前往闪卡背诵此考点
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data and Application Scripts (Offline Safe, Zero External Network Required) -->
+  <script src="data/knowledge.js"></script>
+  <script src="data/mindmap.js"></script>
+  <script src="data/questions.js"></script>
+  <script src="data/cases.js"></script>
+  <script src="js/app.js"></script>
+
+  <!-- PWA Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
+          .catch(err => console.log('[PWA] Service Worker registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# Android build outputs and caches
+.gradle/
+build/
+android/app/build/
+android/.gradle/
+android/local.properties
+*.iml
+.idea/
+
+# OS and Python caches
+__pycache__/
+*.pyc
+Thumbs.db
+.DS_Store
