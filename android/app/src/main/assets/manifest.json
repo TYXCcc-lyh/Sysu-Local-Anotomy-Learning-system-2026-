@@ -1,7 +1,7 @@
 {
   "name": "局部解剖学数字化交互学习系统",
   "short_name": "局部解剖学",
-  "description": "中山大学医学大纲与人卫第十版教材考题对标交互式学习系统",
+  "description": "医学院校教学大纲与人卫第十版教材考题对标交互式学习系统",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0f172a",

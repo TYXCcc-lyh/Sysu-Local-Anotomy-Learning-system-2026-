@@ -102,6 +102,12 @@ chcp 65001 >nul
 title 局部解剖学 - 移动端与 APK 打包助手
 cd /d "%~dp0"
 python scripts\apk_helper_gui.py
+""",
+    "更新GitHub仓库.bat": r"""@echo off
+chcp 65001 >nul
+title 局部解剖学系统 - 更新 GitHub 仓库
+cd /d "%~dp0"
+python scripts\update_github.py
 """
 }
 

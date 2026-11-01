@@ -16,7 +16,7 @@ ZIP_PATH = os.path.join(os.path.dirname(ROOT_DIR), "局部解剖学_手机离线
 class ApkHelperApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("🏥 局部解剖学 - 手机 App 与 APK 制作助手")
+        self.root.title("局部解剖学 - 手机 App 与 APK 制作助手")
         self.root.geometry("680x620")
         self.root.resizable(False, False)
 
@@ -44,7 +44,7 @@ class ApkHelperApp:
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # Tab 1: Method 1 (Online 1-click APK)
-        m1_group = tk.LabelFrame(main_frame, text=" 🌟 方案一：在线 1 键免配置打包 APK（最省心 · 30秒扫码装） ", 
+        m1_group = tk.LabelFrame(main_frame, text=" [方案一] 在线免配置打包 APK (推荐 · 30秒扫码装) ", 
                                  font=("Microsoft YaHei UI", 10, "bold"), padx=12, pady=10)
         m1_group.pack(fill=tk.X, pady=(0, 12))
 
@@ -55,22 +55,22 @@ class ApkHelperApp:
         m1_btn_box = tk.Frame(m1_group, pady=8)
         m1_btn_box.pack(fill=tk.X)
 
-        btn_show_zip = tk.Button(m1_btn_box, text="📁 1. 在电脑中查看离线安装包 (ZIP)", 
+        btn_show_zip = tk.Button(m1_btn_box, text="[1] 在电脑中定位离线安装包 (ZIP)", 
                                  bg="#0284c7", fg="#ffffff", font=("Microsoft YaHei UI", 9, "bold"), 
                                  padx=10, pady=5, relief=tk.FLAT, cursor="hand2", command=self.locate_zip)
         btn_show_zip.pack(side=tk.LEFT, padx=(0, 10))
 
-        btn_open_web = tk.Button(m1_btn_box, text="🌐 2. 打开免费一键打包平台 (一门APP)", 
+        btn_open_web = tk.Button(m1_btn_box, text="[2] 打开免费一键打包平台 (一门APP)", 
                                  bg="#16a34a", fg="#ffffff", font=("Microsoft YaHei UI", 9, "bold"), 
                                  padx=10, pady=5, relief=tk.FLAT, cursor="hand2", command=self.open_online_pack)
         btn_open_web.pack(side=tk.LEFT)
 
         # Tab 2: Method 2 (GitHub Actions Cloud Compile)
-        m2_group = tk.LabelFrame(main_frame, text=" 🚀 方案二：GitHub Actions 云端全自动打包 APK ", 
+        m2_group = tk.LabelFrame(main_frame, text=" [方案二] GitHub Actions 云端全自动打包 APK ", 
                                  font=("Microsoft YaHei UI", 10, "bold"), padx=12, pady=10)
         m2_group.pack(fill=tk.X, pady=(0, 12))
 
-        m2_desc = tk.Label(m2_group, text="输入您的 GitHub 仓库链接，本工具将全自动完成资源同步、Git 初始化并推送到云端自动编译：", 
+        m2_desc = tk.Label(m2_group, text="输入您的 GitHub 仓库链接，本工具将全自动完成资源同步、Git 提交并推送到云端自动编译：", 
                            font=("Microsoft YaHei UI", 9), justify=tk.LEFT)
         m2_desc.pack(anchor="w")
 
@@ -85,13 +85,13 @@ class ApkHelperApp:
         btn_paste = tk.Button(url_box, text="粘贴", font=("Microsoft YaHei UI", 8), command=self.paste_clipboard)
         btn_paste.pack(side=tk.LEFT, padx=(0, 8))
 
-        self.btn_push = tk.Button(m2_group, text="⚡ 一键同步并推送到 GitHub 开始自动编译", 
+        self.btn_push = tk.Button(m2_group, text="同步并推送到 GitHub 开始自动编译", 
                                   bg="#2563eb", fg="#ffffff", font=("Microsoft YaHei UI", 9, "bold"), 
                                   pady=6, relief=tk.FLAT, cursor="hand2", command=self.start_github_push)
         self.btn_push.pack(fill=tk.X, pady=(4, 0))
 
         # Tab 3: Method 3 (LAN PWA)
-        m3_group = tk.LabelFrame(main_frame, text=" 📱 方案三：手机局域网无线免打包模式 (PWA 原生全屏独立 App) ", 
+        m3_group = tk.LabelFrame(main_frame, text=" [方案三] 手机局域网无线免打包模式 (PWA 全屏独立 App) ", 
                                  font=("Microsoft YaHei UI", 10, "bold"), padx=12, pady=10)
         m3_group.pack(fill=tk.X, pady=(0, 10))
 
@@ -99,7 +99,7 @@ class ApkHelperApp:
                            font=("Microsoft YaHei UI", 9), justify=tk.LEFT)
         m3_desc.pack(anchor="w")
 
-        btn_lan = tk.Button(m3_group, text="📶 启动手机无线同步局域网服务", 
+        btn_lan = tk.Button(m3_group, text="启动手机无线同步局域网服务", 
                             bg="#7c3aed", fg="#ffffff", font=("Microsoft YaHei UI", 9, "bold"), 
                             pady=6, relief=tk.FLAT, cursor="hand2", command=self.start_lan_server)
         btn_lan.pack(fill=tk.X, pady=(6, 0))
@@ -110,7 +110,7 @@ class ApkHelperApp:
 
         self.log_text = tk.Text(log_frame, font=("Consolas", 8), height=6, bg="#0f172a", fg="#f8fafc")
         self.log_text.pack(fill=tk.BOTH, expand=True)
-        self.log("✅ 打包助手初始化完成。请根据需要选择上述三种方案之一。")
+        self.log("[INFO] 打包助手初始化完成。请根据需要选择上述三种方案之一。")
 
     def log(self, text):
         self.log_text.insert(tk.END, text + "\n")
@@ -127,7 +127,7 @@ class ApkHelperApp:
         url = "https://www.yimenapp.com/"
         webbrowser.open(url)
         self.log(f"[方案一] 已在浏览器打开免费在线打包平台: {url}")
-        self.log("💡 提示：进入网站后选择「本地HTML/离线包打包」，上传刚才高亮选中的 ZIP 文件即可一键生成 APK！")
+        self.log("[提示] 进入网站后选择「本地HTML/离线包打包」，上传刚才高亮选中的 ZIP 文件即可一键生成 APK。")
 
     def paste_clipboard(self):
         try:
@@ -161,25 +161,25 @@ class ApkHelperApp:
 
             self.log("[方案二] 正在暂存文件与提交...")
             subprocess.run(["git", "add", "."], cwd=ROOT_DIR, check=True)
-            subprocess.run(["git", "commit", "-m", "Feat: Complete Regional Anatomy App with 264 cards and APK workflow"], cwd=ROOT_DIR)
+            subprocess.run(["git", "commit", "-m", "Update anatomy learning system"], cwd=ROOT_DIR)
 
             self.log("[方案二] 正在推送到 GitHub（请保持网络畅通）...")
             proc = subprocess.run(["git", "push", "-u", "origin", "main", "--force"], cwd=ROOT_DIR, capture_output=True, text=True)
 
             if proc.returncode == 0:
-                self.log("🎉 [成功] 代码已成功推送至 GitHub！")
+                self.log("[SUCCESS] 代码已成功推送至 GitHub！")
                 actions_url = repo_url.replace(".git", "") + "/actions"
-                self.log(f"👉 正在自动为您打开云端打包页面: {actions_url}")
+                self.log(f"[INFO] 正在为您打开云端打包页面: {actions_url}")
                 webbrowser.open(actions_url)
                 messagebox.showinfo("推送成功", "代码已成功推送至 GitHub！\n正在为您打开 Actions 页面，请等待 1~2 分钟编译完成后直接下载 APK。")
             else:
-                self.log(f"❌ 推送失败:\n{proc.stderr}")
+                self.log(f"[ERROR] 推送失败:\n{proc.stderr}")
                 messagebox.showerror("推送失败", f"推送遇到问题，请检查网络或仓库地址:\n{proc.stderr}")
         except Exception as e:
-            self.log(f"❌ 运行异常: {e}")
+            self.log(f"[ERROR] 运行异常: {e}")
             messagebox.showerror("错误", str(e))
         finally:
-            self.btn_push.config(state=tk.NORMAL, text="⚡ 一键同步并推送到 GitHub 开始自动编译")
+            self.btn_push.config(state=tk.NORMAL, text="同步并推送到 GitHub 开始自动编译")
 
     def start_lan_server(self):
         bat = os.path.join(ROOT_DIR, "启动手机局域网同步.bat")

@@ -27,7 +27,7 @@ def sync_assets():
         if os.path.exists(src):
             shutil.copy2(src, dst)
 
-    print(f"✅ 资源已成功完整同步至 Android Assets 目录: {assets_dir}")
+    print(f"[SUCCESS] 资源已成功完整同步至 Android Assets 目录: {assets_dir}")
 
 if __name__ == "__main__":
     sync_assets()

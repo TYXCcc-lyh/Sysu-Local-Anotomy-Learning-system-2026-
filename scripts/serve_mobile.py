@@ -13,7 +13,6 @@ PORT = 8080
 
 def get_ip_addresses():
     ips = []
-    # Try powershell net ip address for Windows
     try:
         out = subprocess.check_output(
             ["powershell", "-NoProfile", "-Command", 
@@ -48,7 +47,6 @@ def run_server():
 
     global PORT
     handler = http.server.SimpleHTTPRequestHandler
-    # Enable cache headers and utf-8
     handler.extensions_map.update({
         '.js': 'application/javascript',
         '.json': 'application/json',
@@ -63,13 +61,12 @@ def run_server():
             PORT += 1
 
     ips = get_ip_addresses()
-    # Sort so WLAN comes first
     ips.sort(key=lambda x: not x[2])
 
     print("=" * 64)
-    print("   🏥《局部解剖学》移动端同步与 PWA 原生安装服务器已启动")
+    print("   局部解剖学移动端同步与 PWA 独立安装服务已启动")
     print("=" * 64)
-    print("\n【手机访问方法】")
+    print("\n[手机访问方法]")
     print("  1. 请确保手机与此电脑连接在同一个 Wi-Fi / 局域网下")
     print("  2. 在手机浏览器中直接输入以下网址访问：\n")
 
@@ -77,19 +74,19 @@ def run_server():
     for ip, alias, is_wlan in ips:
         url = f"http://{ip}:{PORT}"
         tag = "[推荐 Wi-Fi 访问]" if is_wlan else f"[{alias}]"
-        print(f"     👉  {url:<28}  {tag}")
+        print(f"     > {url:<28}  {tag}")
         if is_wlan and not primary_url:
             primary_url = url
 
     if not primary_url and ips:
         primary_url = f"http://{ips[0][0]}:{PORT}"
 
-    print("\n【免打包！1秒直接在安卓手机安装为独立原生 APP】")
-    print("  • Chrome / Edge 浏览器：点击右上角菜单 ->「安装应用」或「添加到主屏幕」")
-    print("  • 华为 / 小米 / 蓝绿厂自带浏览器：点击底部菜单 ->「添加到桌面」或「快捷方式」")
-    print("  • 夸克 / Via / X 浏览器：点击工具箱 ->「添加到桌面」")
-    print("  ★ 安装后：手机桌面会出现《局部解剖学》独立 App 图标！")
-    print("  ★ 离线支持：由于内置 Service Worker 强缓存，打开一次后即使电脑关机或断网，")
+    print("\n[免打包！1秒直接在安卓手机安装为独立原生 APP]")
+    print("  - Chrome / Edge 浏览器：点击右上角菜单 ->「安装应用」或「添加到主屏幕」")
+    print("  - 华为 / 小米 / 蓝绿厂自带浏览器：点击底部菜单 ->「添加到桌面」或「快捷方式」")
+    print("  - 夸克 / Via / X 浏览器：点击工具箱 ->「添加到桌面」")
+    print("  * 安装后：手机桌面会出现《局部解剖学》独立 App 图标！")
+    print("  * 离线支持：由于内置 Service Worker 强缓存，打开一次后即使电脑关机或断网，")
     print("             手机也能 100% 离线顺畅学习全部 264 张闪卡、思维导图与题库！")
     print("=" * 64)
     print(f"服务运行中 (端口: {PORT})，按 Ctrl + C 可停止服务...\n")
