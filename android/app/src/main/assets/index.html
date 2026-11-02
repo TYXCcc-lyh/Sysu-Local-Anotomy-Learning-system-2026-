@@ -508,15 +508,15 @@
   </main>
 
   <!-- Knowledge Preview Modal (Linked from questions & mindmap) -->
-  <div class="modal-overlay" id="knowledgeModal">
+  <div class="modal-overlay" id="knowledgeModal" onclick="if(event.target===this)window.APP.closeKnowledgeModal()">
     <div class="modal-box">
       <div class="modal-header">
         <h3 id="modalKnowledgeTitle">考点知识解析</h3>
-        <button class="modal-close" id="modalCloseBtn">✕</button>
+        <button class="modal-close" id="modalCloseBtn" onclick="window.APP.closeKnowledgeModal()">✕</button>
       </div>
       <div class="modal-body" id="modalKnowledgeBody"></div>
       <div style="padding:1rem 1.5rem; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:0.75rem; background:var(--bg-subtle);">
-        <button class="btn-nav" onclick="document.getElementById('modalCloseBtn').click()">关闭</button>
+        <button class="btn-nav" id="modalCloseActionBtn" onclick="window.APP.closeKnowledgeModal()">关闭</button>
         <button class="btn-nav" id="modalGoAnkiBtn" style="background:var(--primary); color:#fff; border-color:var(--primary);">
           <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           前往闪卡背诵此考点

@@ -639,6 +639,20 @@
       });
     }
 
+    // Knowledge Modal events
+    if (dom.modalCloseBtn) {
+      dom.modalCloseBtn.addEventListener('click', closeKnowledgeModal);
+    }
+    const modalCloseActionBtn = document.getElementById('modalCloseActionBtn');
+    if (modalCloseActionBtn) {
+      modalCloseActionBtn.addEventListener('click', closeKnowledgeModal);
+    }
+    if (dom.modalOverlay) {
+      dom.modalOverlay.addEventListener('click', (e) => {
+        if (e.target === dom.modalOverlay) closeKnowledgeModal();
+      });
+    }
+
     // Keyboard Shortcuts
     document.addEventListener('keydown', handleKeyboardShortcuts);
 
@@ -1938,6 +1952,8 @@
 
   function closeKnowledgeModal() {
     if (dom.modalOverlay) dom.modalOverlay.classList.remove('active');
+    const modal = document.getElementById('knowledgeModal');
+    if (modal) modal.classList.remove('active');
   }
 
   // ================= 9. 数据中心与统计看板 =================
@@ -1987,6 +2003,15 @@
 
   function handleKeyboardShortcuts(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    if (e.key === 'Escape') {
+      closeKnowledgeModal();
+      closeMmNodeModal();
+      closeQNoteModal();
+      const courseModal = document.getElementById('courseImportModal');
+      if (courseModal) courseModal.classList.remove('active');
+      return;
+    }
 
     if (state.activeView === 'anki') {
       if (e.code === 'Space') {
@@ -2094,6 +2119,7 @@
 
     // Cross-link Navigation
     openKnowledgeModal: openKnowledgeModal,
+    closeKnowledgeModal: closeKnowledgeModal,
     goToAnkiCard: (kbId) => {
       const list = getKnowledgeData();
       const idx = list.findIndex(k => k.id === kbId);
