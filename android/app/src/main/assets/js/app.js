@@ -1170,8 +1170,9 @@
     const isStarred = store.starred.includes(q.id);
     const isSlashed = store.slashed.includes(q.id);
     const ansInfo = store.answered[q.id];
-    const isAnswered = !!ansInfo || (state.quizMode === 'recite');
+    const isAnswered = !!ansInfo;
     const isRecite = state.quizMode === 'recite';
+    const showExp = isAnswered || isRecite;
     const userNote = store.questionNotes[q.id] || {};
 
     let html = `
@@ -1209,23 +1210,28 @@
         ` : ''}
 
         <div class="q-actions-bar">
-          <div class="q-actions-left">
+          <div class="q-actions-left" style="display:flex; align-items:center; gap:0.5rem;">
+            ${isAnswered ? `
+              <button class="btn-nav" style="padding:0.25rem 0.65rem; font-size:0.78rem;" onclick="window.APP.resetQuestion('${q.id}')" title="清空本题记录以便盲测重做">
+                重做本题
+              </button>
+            ` : ''}
             ${(userNote.note || userNote.customAns || userNote.img) ? `
               <span class="user-note-badge" style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.78rem; color:#d97706; background:#fef3c7; padding:0.25rem 0.6rem; border-radius:var(--radius-sm); font-weight:600;">
-                已记录个人笔记/自拟解析
+                已记录个人笔记
               </span>
             ` : ''}
           </div>
           <div class="q-actions-right">
             ${state.quizMode !== 'exam' || state.examSubmitted ? `
               <button class="btn-toggle-explain" id="btn-exp-${q.id}" onclick="window.APP.toggleExplanation('${q.id}')">
-                ${(isAnswered || isRecite) ? '收起答案与解析' : '查看答案与解析'}
+                ${showExp ? '收起答案与解析' : '查看答案与解析'}
               </button>
             ` : ''}
           </div>
         </div>
 
-        <div class="q-explanation ${(isAnswered || isRecite) ? 'show' : ''}" id="qexp-${q.id}">
+        <div class="q-explanation ${showExp ? 'show' : ''}" id="qexp-${q.id}" style="display:${showExp ? 'block' : 'none'};">
           ${renderExplanationHtml(q)}
         </div>
 
@@ -1352,9 +1358,7 @@
       return;
     }
 
-    // 单选题判定
-    if (store.answered[qId]) return; // 已判题不重复判
-
+    // 单选题判定 (允许重选更正或盲测，保证做题体验灵动)
     const isCorrect = (letter.toUpperCase() === (q.answer || '').trim().toUpperCase());
     store.answered[qId] = {
       userAnswer: letter,
@@ -1377,6 +1381,15 @@
         window.APP.navigateQuestionIndex(1);
       }, 350);
     }
+  }
+
+  function handleResetQuestion(qId) {
+    delete store.answered[qId];
+    delete state.examAnswers[qId];
+    delete state.xSelections[qId];
+    store.wrong = store.wrong.filter(id => id !== qId);
+    saveStore();
+    refreshCardUI(qId);
   }
 
   function handleSubmitX(qId) {
@@ -1444,18 +1457,23 @@
       const q = list.find(item => item.id === qId);
       if (!q) return;
       const ansInfo = store.answered[qId];
-      const isAnswered = !!ansInfo || (state.quizMode === 'recite');
+      const isAnswered = !!ansInfo;
+      const isRecite = state.quizMode === 'recite';
+      const showExp = isAnswered || isRecite;
 
       const optsEl = card.querySelector('.q-options');
-      if (optsEl) optsEl.innerHTML = renderOptionsHtml(q, isAnswered, ansInfo, state.quizMode === 'recite');
+      if (optsEl) optsEl.innerHTML = renderOptionsHtml(q, isAnswered, ansInfo, isRecite);
 
       const expEl = card.querySelector('.q-explanation');
       if (expEl) {
         expEl.innerHTML = renderExplanationHtml(q);
-        if (isAnswered) expEl.classList.add('show');
+        if (showExp) {
+          expEl.classList.add('show');
+          expEl.style.display = 'block';
+        }
       }
       const expBtn = card.querySelector('.btn-toggle-explain');
-      if (expBtn && isAnswered) {
+      if (expBtn && showExp) {
         expBtn.textContent = '收起答案与解析';
       }
     }
@@ -1465,11 +1483,13 @@
     const expBox = document.getElementById(`qexp-${qId}`);
     const expBtn = document.getElementById(`btn-exp-${qId}`);
     if (expBox) {
-      const isVisible = expBox.classList.contains('show');
+      const isVisible = (expBox.style.display === 'block') || expBox.classList.contains('show');
       if (isVisible) {
+        expBox.style.display = 'none';
         expBox.classList.remove('show');
         if (expBtn) expBtn.textContent = '查看答案与解析';
       } else {
+        expBox.style.display = 'block';
         expBox.classList.add('show');
         if (expBtn) expBtn.textContent = '收起答案与解析';
       }
@@ -2030,6 +2050,7 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
     selectOption: handleSelectOption,
+    resetQuestion: handleResetQuestion,
     submitX: handleSubmitX,
     toggleStar: handleToggleStar,
     toggleSlash: handleToggleSlash,
