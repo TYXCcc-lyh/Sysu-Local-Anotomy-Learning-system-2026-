@@ -79,6 +79,11 @@
   -webkit-font-smoothing: antialiased;
 }
 
+html {
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   background-color: var(--bg-main);
@@ -438,7 +443,8 @@ body {
   cursor: pointer;
 }
 
-.flashcard.is-flipped {
+.flashcard.is-flipped,
+.flashcard.flipped {
   transform: rotateY(180deg);
 }
 
@@ -641,14 +647,14 @@ body {
 
 .mindmap-layout {
   display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   gap: 1.5rem;
   align-items: start;
 }
 
 @media (max-width: 1024px) {
   .mindmap-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -659,7 +665,9 @@ body {
   padding: 1.75rem;
   box-shadow: var(--shadow-sm);
   min-height: 600px;
-  overflow-x: auto;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .mm-node {
@@ -1259,22 +1267,48 @@ body {
   gap: 0.5rem;
 }
 
+.btn-toggle-answer,
+.case-reveal-btn {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px dashed var(--primary);
+  border-radius: var(--radius-md);
+  background: rgba(37, 99, 235, 0.05);
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.btn-toggle-answer:hover,
 .case-reveal-btn:hover {
   background: var(--primary);
   color: #fff;
   border-style: solid;
 }
 
+.case-answer-box,
 .case-answers-drawer {
   display: none;
   margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border);
+  padding: 1.25rem;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
   animation: fadeIn 0.25s ease;
 }
 
-.case-answers-drawer.open {
-  display: block;
+.case-answer-box.show,
+.case-answer-box.open,
+.case-answers-drawer.open,
+.case-answers-drawer.show {
+  display: block !important;
 }
 
 .ans-item {
@@ -1841,6 +1875,9 @@ body {
   border-left: 3px solid var(--primary);
   border-radius: var(--radius-sm);
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  max-width: calc(100% - 1.5rem);
+  box-sizing: border-box;
+  overflow-wrap: break-word;
   animation: fadeIn 0.15s ease;
 }
 .mm-leaf-prompt {
@@ -1961,3 +1998,46 @@ body {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
+
+/* 题目答案与解析展开按钮与操作栏 (Image 3 UI 对标) */
+.q-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+}
+.btn-toggle-explain {
+  padding: 0.5rem 1.15rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: rgba(37, 99, 235, 0.06);
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.btn-toggle-explain:hover {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+/* 医考帮 答题卡底部状态栏 (Image 4 UI 对标) */
+.sheet-bottom-summary {
+  margin-top: 1.25rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+

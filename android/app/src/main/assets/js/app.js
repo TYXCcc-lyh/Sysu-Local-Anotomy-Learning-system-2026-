@@ -590,9 +590,14 @@
     }
 
     // Anki controls
-    if (dom.btnFlipCard) dom.btnFlipCard.addEventListener('click', toggleAnkiFlip);
+    if (dom.btnFlipCard) dom.btnFlipCard.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleAnkiFlip();
+    });
     if (dom.ankiCard) dom.ankiCard.addEventListener('click', (e) => {
-      if (!e.target.closest('.anki-rating-btns') && !e.target.closest('.btn-nav')) toggleAnkiFlip();
+      if (!e.target.closest('.anki-rating-btns') && !e.target.closest('.btn-nav') && !e.target.closest('button') && !e.target.closest('a')) {
+        toggleAnkiFlip();
+      }
     });
     if (dom.btnPrevCard) dom.btnPrevCard.addEventListener('click', () => navigateAnkiCard(-1));
     if (dom.btnNextCard) dom.btnNextCard.addEventListener('click', () => navigateAnkiCard(1));
@@ -620,13 +625,17 @@
         getKnowledgeData().forEach(k => {
           state.expandedKnowledgeNodes[k.id] = true;
         });
-        renderMindMap();
+        document.querySelectorAll('.mm-children').forEach(c => c.classList.add('open'));
+        document.querySelectorAll('.mm-toggle-btn').forEach(b => b.classList.add('expanded'));
+        document.querySelectorAll('.mm-leaf-knowledge-box').forEach(b => b.style.display = 'block');
+        document.querySelectorAll('.mm-leaf-toggle-btn').forEach(b => b.textContent = '收起知识');
       });
     }
     if (dom.btnMmCollapseAllKnowledge) {
       dom.btnMmCollapseAllKnowledge.addEventListener('click', () => {
         state.expandedKnowledgeNodes = {};
-        renderMindMap();
+        document.querySelectorAll('.mm-leaf-knowledge-box').forEach(b => b.style.display = 'none');
+        document.querySelectorAll('.mm-leaf-toggle-btn').forEach(b => b.textContent = '展开知识');
       });
     }
 
@@ -716,7 +725,10 @@
 
     const card = cards[state.ankiIndex];
     state.ankiFlipped = false;
-    if (dom.ankiCard) dom.ankiCard.classList.remove('flipped');
+    if (dom.ankiCard) {
+      dom.ankiCard.classList.remove('flipped');
+      dom.ankiCard.classList.remove('is-flipped');
+    }
 
     if (dom.ankiCardTitle) dom.ankiCardTitle.textContent = card.title || '核心考点';
     if (dom.ankiCardTag) dom.ankiCardTag.textContent = `${card.chapter || ''} · ${card.title || ''}`;
@@ -760,7 +772,10 @@
 
   function toggleAnkiFlip() {
     state.ankiFlipped = !state.ankiFlipped;
-    if (dom.ankiCard) dom.ankiCard.classList.toggle('flipped', state.ankiFlipped);
+    if (dom.ankiCard) {
+      dom.ankiCard.classList.toggle('flipped', state.ankiFlipped);
+      dom.ankiCard.classList.toggle('is-flipped', state.ankiFlipped);
+    }
   }
 
   function navigateAnkiCard(step) {
@@ -792,7 +807,7 @@
 
   function renderTreeNodeHtml(node, level) {
     const hasChildren = node.children && node.children.length > 0;
-    const nodeId = 'mm_' + Math.random().toString(36).substr(2, 9);
+    const nodeId = 'mm_node_' + (node.kbId || encodeURIComponent(node.name).replace(/[^a-zA-Z0-9_]/g, '_'));
     const isLeafKnowledge = !!node.kbId;
     const custom = (node.kbId && store.mindmapCustom[node.kbId]) || {};
     const isInlineExpanded = !!state.expandedKnowledgeNodes[node.kbId];
@@ -820,11 +835,11 @@
         </div>
     `;
 
-    // 叶子节点内嵌直接展示知识卡片
-    if (isLeafKnowledge && isInlineExpanded) {
+    // 叶子节点内嵌直接展示知识卡片 (常驻 DOM 并由 display 控制，避免全树重绘抖动)
+    if (isLeafKnowledge) {
       const card = getKnowledgeData().find(k => k.id === node.kbId) || {};
       html += `
-        <div class="mm-leaf-knowledge-box">
+        <div class="mm-leaf-knowledge-box" style="display:${isInlineExpanded ? 'block' : 'none'};">
           <div class="mm-leaf-prompt">【考点引导】：${escapeHtml(card.front || node.desc || '')}</div>
           <div class="mm-leaf-back">${escapeHtml(card.back || '')}</div>
           ${card.mnemonic ? `<div class="mm-leaf-mnemonic">【记忆口诀】：${escapeHtml(card.mnemonic)}</div>` : ''}
@@ -858,7 +873,7 @@
   }
 
   function toggleMindMapNode(event, nodeId) {
-    event.stopPropagation();
+    if (event) event.stopPropagation();
     const nodeEl = document.getElementById(nodeId);
     if (!nodeEl) return;
     const btn = nodeEl.querySelector(':scope > .mm-node-row > .mm-toggle-btn');
@@ -874,8 +889,16 @@
 
   function toggleLeafKnowledge(event, kbId) {
     if (event) event.stopPropagation();
-    state.expandedKnowledgeNodes[kbId] = !state.expandedKnowledgeNodes[kbId];
-    renderMindMap();
+    const willExpand = !state.expandedKnowledgeNodes[kbId];
+    state.expandedKnowledgeNodes[kbId] = willExpand;
+    
+    const nodeEl = document.querySelector(`.mm-node[data-kbid="${kbId}"]`);
+    if (nodeEl) {
+      const box = nodeEl.querySelector('.mm-leaf-knowledge-box');
+      const toggleBtn = nodeEl.querySelector('.mm-leaf-toggle-btn');
+      if (box) box.style.display = willExpand ? 'block' : 'none';
+      if (toggleBtn) toggleBtn.textContent = willExpand ? '收起知识' : '展开知识';
+    }
   }
 
   function inspectMindMapNode(name, desc, chapter, kbId) {
@@ -938,11 +961,13 @@
       list = list.filter(q => !store.slashed.includes(q.id));
     }
 
-    // 3. 题型过滤 (Row 2: 全部 | A1 | A2 | X)
+    // 3. 题型过滤 (Row 2: 全部 | A1 | A2 | B | X)
     if (state.qTypeFilter === 'A') {
       list = list.filter(q => q.type === 'A' && (!q.typeLabel || !q.typeLabel.includes('A2')));
     } else if (state.qTypeFilter === 'A2') {
       list = list.filter(q => q.typeLabel && q.typeLabel.includes('A2'));
+    } else if (state.qTypeFilter === 'B') {
+      list = list.filter(q => q.type === 'B' || (q.typeLabel && q.typeLabel.includes('B')));
     } else if (state.qTypeFilter === 'X') {
       list = list.filter(q => q.type === 'X');
     }
@@ -1022,7 +1047,35 @@
           未找到符合当前筛选条件的题目。请尝试在上方切换「斩题」、「题型」或「分类」标签。
         </div>
       `;
+      const sheetBottomSummary = document.getElementById('sheetBottomSummary');
+      if (sheetBottomSummary) sheetBottomSummary.textContent = '当前共 0 题，未做 0 题';
       return;
+    }
+
+    let unansweredCount = 0;
+    let correctCount = 0;
+    let wrongCount = 0;
+    let slashedCount = 0;
+    list.forEach(q => {
+      const ansInfo = store.answered[q.id];
+      if (!ansInfo) unansweredCount++;
+      else if (ansInfo.isCorrect) correctCount++;
+      else wrongCount++;
+      if (store.slashed.includes(q.id)) slashedCount++;
+    });
+    const answeredCount = list.length - unansweredCount;
+    const accuracy = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
+
+    const sheetTotalCount = document.getElementById('sheetTotalCount');
+    const sheetUnansweredCount = document.getElementById('sheetUnansweredCount');
+    const sheetSlashedCount = document.getElementById('sheetSlashedCount');
+    if (sheetTotalCount) sheetTotalCount.textContent = list.length;
+    if (sheetUnansweredCount) sheetUnansweredCount.textContent = unansweredCount;
+    if (sheetSlashedCount) sheetSlashedCount.textContent = slashedCount;
+
+    const sheetBottomSummary = document.getElementById('sheetBottomSummary');
+    if (sheetBottomSummary) {
+      sheetBottomSummary.textContent = `当前共 ${list.length} 题，未做 ${unansweredCount} 题，已做 ${answeredCount} 题 (正确率 ${accuracy}%)，已斩 ${slashedCount} 题`;
     }
 
     let html = '';
@@ -1154,6 +1207,23 @@
             </button>
           </div>
         ` : ''}
+
+        <div class="q-actions-bar">
+          <div class="q-actions-left">
+            ${(userNote.note || userNote.customAns || userNote.img) ? `
+              <span class="user-note-badge" style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.78rem; color:#d97706; background:#fef3c7; padding:0.25rem 0.6rem; border-radius:var(--radius-sm); font-weight:600;">
+                已记录个人笔记/自拟解析
+              </span>
+            ` : ''}
+          </div>
+          <div class="q-actions-right">
+            ${state.quizMode !== 'exam' || state.examSubmitted ? `
+              <button class="btn-toggle-explain" id="btn-exp-${q.id}" onclick="window.APP.toggleExplanation('${q.id}')">
+                ${(isAnswered || isRecite) ? '收起答案与解析' : '查看答案与解析'}
+              </button>
+            ` : ''}
+          </div>
+        </div>
 
         <div class="q-explanation ${(isAnswered || isRecite) ? 'show' : ''}" id="qexp-${q.id}">
           ${renderExplanationHtml(q)}
@@ -1383,6 +1453,25 @@
       if (expEl) {
         expEl.innerHTML = renderExplanationHtml(q);
         if (isAnswered) expEl.classList.add('show');
+      }
+      const expBtn = card.querySelector('.btn-toggle-explain');
+      if (expBtn && isAnswered) {
+        expBtn.textContent = '收起答案与解析';
+      }
+    }
+  }
+
+  function toggleExplanation(qId) {
+    const expBox = document.getElementById(`qexp-${qId}`);
+    const expBtn = document.getElementById(`btn-exp-${qId}`);
+    if (expBox) {
+      const isVisible = expBox.classList.contains('show');
+      if (isVisible) {
+        expBox.classList.remove('show');
+        if (expBtn) expBtn.textContent = '查看答案与解析';
+      } else {
+        expBox.classList.add('show');
+        if (expBtn) expBtn.textContent = '收起答案与解析';
       }
     }
   }
@@ -1733,10 +1822,10 @@
               <strong style="color:var(--text-main);">【解剖学思考题】：</strong><br>
               <div style="margin-top:0.35rem;">${questionsHtml}</div>
             </div>
-            <button class="btn-toggle-answer" onclick="window.APP.toggleCaseAnswer('${c.id}')">
+            <button class="btn-toggle-answer" id="btn-toggle-case-${c.id}" onclick="window.APP.toggleCaseAnswer('${c.id}')">
               展开权威解剖学机制与思考题详解
             </button>
-            <div class="case-answer-box" id="case-ans-${c.id}">
+            <div class="case-answer-box" id="case-ans-${c.id}" style="display:none;">
               <div style="margin-bottom:0.5rem; font-weight:700; color:var(--success);">【权威解剖学思考题详解】：</div>
               ${answersHtml}
               ${c.clinicalPearl ? `
@@ -1753,7 +1842,19 @@
 
   function handleToggleCaseAnswer(cId) {
     const box = document.getElementById(`case-ans-${cId}`);
-    if (box) box.classList.toggle('show');
+    const btn = document.getElementById(`btn-toggle-case-${cId}`);
+    if (box) {
+      const isHidden = box.style.display === 'none' || !box.classList.contains('show');
+      if (isHidden) {
+        box.style.display = 'block';
+        box.classList.add('show');
+        if (btn) btn.textContent = '收起权威解剖学机制与思考题详解';
+      } else {
+        box.style.display = 'none';
+        box.classList.remove('show');
+        if (btn) btn.textContent = '展开权威解剖学机制与思考题详解';
+      }
+    }
   }
 
   function handleToggleStarCase(cId) {
@@ -1932,6 +2033,7 @@
     submitX: handleSubmitX,
     toggleStar: handleToggleStar,
     toggleSlash: handleToggleSlash,
+    toggleExplanation: toggleExplanation,
     changePage: (p) => {
       state.page = p;
       renderQuizView();
@@ -1949,10 +2051,7 @@
       if (target) target.classList.add('active');
       inspectMindMapNode(name, desc, chapter, kbId);
       if (kbId) {
-        state.expandedKnowledgeNodes[kbId] = !state.expandedKnowledgeNodes[kbId];
-        renderMindMap();
-        const reTarget = document.getElementById(nodeId);
-        if (reTarget) reTarget.classList.add('active');
+        toggleLeafKnowledge(null, kbId);
       }
     },
     toggleMmNode: toggleMindMapNode,
