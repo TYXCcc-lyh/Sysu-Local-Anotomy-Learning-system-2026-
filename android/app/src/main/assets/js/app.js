@@ -1,21 +1,38 @@
 /**
- * 中山大学《局部解剖学》数字化学习系统 - Core Application Engine
- * Pure Vanilla JS, High Performance, Zero External Dependencies, Professional SVGs
+ * 数字化医学交互学习系统 - Core Application Engine
+ * 医考帮架构对标 · 多学科扩展 · 全量答题卡矩阵 · 智能斩题 · 思维导图内嵌展示 · 自主图文笔记
+ * Pure Vanilla JS, High Performance, Zero External Dependencies
  */
 
 (function () {
   'use strict';
 
-  // ================= State & Store =================
-  const STORE_KEY = 'SYSU_ANATOMY_LEARNING_DATA_V3';
+  // ================= Course & Store Management =================
+  function getCourse() {
+    return (typeof CourseManager !== 'undefined') ? CourseManager.getCurrentCourse() : {
+      id: 'anatomy',
+      name: '局部解剖学',
+      shortName: '局解',
+      badge: 'ANATOMY',
+      desc: '高等医学院校教学大纲 · 人卫十版教材'
+    };
+  }
+
+  function getStoreKey() {
+    const course = getCourse();
+    return `MED_LEARNING_STORE_${course.id.toUpperCase()}_V4`;
+  }
 
   const defaultStore = {
-    answered: {},     // qId -> { userAnswer, isCorrect, timestamp }
-    wrong: [],        // array of qIds
-    starred: [],      // array of qIds
-    masteredCards: {},// cardId -> { status: 'again'|'good'|'easy', count }
-    masteredCases: [],// array of caseIds
-    starredCases: [], // array of caseIds
+    answered: {},        // qId -> { userAnswer, isCorrect, timestamp }
+    wrong: [],           // array of qIds
+    starred: [],         // array of qIds
+    slashed: [],         // array of qIds (医考帮斩题库)
+    questionNotes: {},   // qId -> { note: string, customAns: string, img: string, time: number }
+    mindmapCustom: {},   // kbId -> { notes: string, img: string, time: number }
+    masteredCards: {},   // cardId -> { status: 'again'|'good'|'easy', count }
+    masteredCases: [],   // array of caseIds
+    starredCases: [],    // array of caseIds
     theme: 'light'
   };
 
@@ -23,7 +40,7 @@
 
   function loadStore() {
     try {
-      const data = localStorage.getItem(STORE_KEY);
+      const data = localStorage.getItem(getStoreKey());
       return data ? Object.assign({}, defaultStore, JSON.parse(data)) : Object.assign({}, defaultStore);
     } catch (e) {
       console.error('Failed to load localStorage', e);
@@ -33,7 +50,7 @@
 
   function saveStore() {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(store));
+      localStorage.setItem(getStoreKey(), JSON.stringify(store));
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
@@ -42,17 +59,26 @@
 
   // Active runtime state
   const state = {
-    activeView: 'anki',       // anki | mindmap | quiz | cases | errors | favorites | stats
-    chapter: '全部',          // 全部 | 下肢 | 上肢 | 头部 | 颈部 | 头颈部 | 胸部 | 腹部 | 盆部和会阴 | 背部（脊柱区）
+    activeView: 'quiz',       // anki | mindmap | quiz | cases | errors | favorites | stats (default to quiz for immediate exam prep)
+    chapter: '全部',          // 全部 | or specific chapter
     searchQuery: '',
     
     // Anki state
     ankiIndex: 0,
     ankiFlipped: false,
     
-    // Quiz state
-    qTypeFilter: 'all',       // all | A | X
-    qStatusFilter: 'all',     // all | unanswered | wrong | correct | starred
+    // 医考帮 题库架构状态
+    quizSlashFilter: 'all',    // all | slashed | unslashed (斩题)
+    qTypeFilter: 'all',        // all | A | A2 | X
+    qCategoryFilter: 'all',    // all | wrong | starred | unanswered
+    qSubTopicFilter: 'all',    // all | specific subtopic string
+    quizMode: 'practice',      // practice (练习) | speed (快刷) | exam (测试) | recite (背题)
+    quizViewMode: 'sheet',     // sheet (答题卡矩阵全览) | card (单题沉浸) | list (连续流式)
+    activeQuestionIndex: 0,    // current question index in active filtered list
+    examAnswers: {},           // temp answers before exam submission
+    examSubmitted: false,      // whether current exam has been submitted
+    
+    // Pagination (for list view)
     page: 1,
     pageSize: 20,
     
@@ -61,16 +87,42 @@
     
     // Mind Map state
     selectedNode: null,
+    expandedKnowledgeNodes: {}, // kbId -> boolean (whether leaf knowledge card is expanded)
+    openMmBranches: {},         // nodeName -> boolean (whether folder branch is open)
+    allBranchesOpen: false,     // whether expand-all is active
+    
+    // Editing modal state
+    editingMmKbId: null,
+    editingQId: null,
     
     // Temp x-type selections: qId -> Set of options
     xSelections: {}
   };
 
-  // Safe access to data arrays
-  const KnowledgeData = window.ANATOMY_KNOWLEDGE || [];
-  const QuestionsData = window.ANATOMY_QUESTIONS || [];
-  const CasesData = window.ANATOMY_CASES || [];
-  const MindMapData = window.ANATOMY_MINDMAP || null;
+  // Dynamic Data Accessors
+  function getKnowledgeData() {
+    const c = (typeof CourseManager !== 'undefined') ? CourseManager.getCurrentCourse() : null;
+    if (c && typeof c.getKnowledge === 'function') return c.getKnowledge();
+    return window.ANATOMY_KNOWLEDGE || (typeof KnowledgeData !== 'undefined' ? KnowledgeData : []);
+  }
+
+  function getQuestionsData() {
+    const c = (typeof CourseManager !== 'undefined') ? CourseManager.getCurrentCourse() : null;
+    if (c && typeof c.getQuestions === 'function') return c.getQuestions();
+    return window.ANATOMY_QUESTIONS || (typeof QuestionsData !== 'undefined' ? QuestionsData : []);
+  }
+
+  function getCasesData() {
+    const c = (typeof CourseManager !== 'undefined') ? CourseManager.getCurrentCourse() : null;
+    if (c && typeof c.getCases === 'function') return c.getCases();
+    return window.ANATOMY_CASES || (typeof CasesData !== 'undefined' ? CasesData : []);
+  }
+
+  function getMindMapData() {
+    const c = (typeof CourseManager !== 'undefined') ? CourseManager.getCurrentCourse() : null;
+    if (c && typeof c.getMindmap === 'function') return c.getMindmap();
+    return window.ANATOMY_MINDMAP || (typeof MindMapData !== 'undefined' ? MindMapData : null);
+  }
 
   // SVG Icon definitions
   const SVG = {
@@ -79,7 +131,9 @@
     check: `<svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
     book: `<svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`,
     arrowRight: `<svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`,
-    info: `<svg class="svg-icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`
+    slash: `<svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line></svg>`,
+    edit: `<svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`,
+    image: `<svg class="svg-icon icon-xs" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`
   };
 
   // ================= DOM Elements =================
@@ -94,274 +148,498 @@
     badgeErrors: document.getElementById('badgeErrorCount'),
     badgeStarred: document.getElementById('badgeStarredCount'),
     
+    // Course Switcher Elements
+    courseSelectBtn: document.getElementById('courseSelectBtn'),
+    courseDropdownMenu: document.getElementById('courseDropdownMenu'),
+    currentCourseBadge: document.getElementById('currentCourseBadge'),
+    currentCourseName: document.getElementById('currentCourseName'),
+    headerSubTag: document.getElementById('headerSubTag'),
+    headerSubDesc: document.getElementById('headerSubDesc'),
+    
     // Anki elements
     ankiCard: document.getElementById('ankiFlashcard'),
     ankiCardTag: document.getElementById('ankiCardTag'),
     ankiCardHint: document.getElementById('ankiCardHint'),
     ankiCardTitle: document.getElementById('ankiCardTitle'),
-    ankiCardPrompt: document.getElementById('ankiCardPrompt'),
-    ankiCardAnswer: document.getElementById('ankiCardAnswer'),
+    ankiFrontText: document.getElementById('ankiCardPrompt'),
+    ankiBackText: document.getElementById('ankiCardAnswer'),
     ankiClinicalBox: document.getElementById('ankiClinicalBox'),
     ankiClinicalText: document.getElementById('ankiClinicalText'),
-    ankiProgressTrack: document.getElementById('ankiProgressFill'),
     ankiProgressText: document.getElementById('ankiProgressText'),
+    ankiProgressFill: document.getElementById('ankiProgressFill'),
+    btnFlipCard: document.getElementById('btnAnkiFlip'),
+    btnPrevCard: document.getElementById('btnAnkiPrev'),
+    btnNextCard: document.getElementById('btnAnkiNext'),
     btnRateAgain: document.getElementById('btnRateAgain'),
     btnRateGood: document.getElementById('btnRateGood'),
     btnRateEasy: document.getElementById('btnRateEasy'),
-    btnAnkiPrev: document.getElementById('btnAnkiPrev'),
-    btnAnkiNext: document.getElementById('btnAnkiNext'),
-    btnAnkiFlip: document.getElementById('btnAnkiFlip'),
     
     // Mind Map elements
-    mmTree: document.getElementById('mindmapTree'),
-    btnMmExpandAll: document.getElementById('btnMmExpandAll'),
-    btnMmCollapseAll: document.getElementById('btnMmCollapseAll'),
+    mindmapTree: document.getElementById('mindmapTree'),
     inspectorTitle: document.getElementById('inspectorTitle'),
     inspectorDesc: document.getElementById('inspectorDesc'),
     inspectorActions: document.getElementById('inspectorActions'),
+    btnMmExpandAll: document.getElementById('btnMmExpandAll'),
+    btnMmCollapseAll: document.getElementById('btnMmCollapseAll'),
+    btnMmExpandAllKnowledge: document.getElementById('btnMmExpandAllKnowledge'),
+    btnMmCollapseAllKnowledge: document.getElementById('btnMmCollapseAllKnowledge'),
     
-    // Quiz elements
-    quizList: document.getElementById('quizQuestionsList'),
+    // Quiz & Testing Elements (医考帮架构)
+    yikaoFilterPanel: document.getElementById('yikaoFilterPanel'),
+    pillsSlashFilter: document.getElementById('pillsSlashFilter'),
+    pillsTypeFilter: document.getElementById('pillsTypeFilter'),
+    pillsCategoryFilter: document.getElementById('pillsCategoryFilter'),
+    pillsModeFilter: document.getElementById('pillsModeFilter'),
+    yikaoSubTopicRow: document.getElementById('yikaoSubTopicRow'),
+    pillsSubTopicFilter: document.getElementById('pillsSubTopicFilter'),
+    btnViewSheet: document.getElementById('btnViewSheet'),
+    btnViewCard: document.getElementById('btnViewCard'),
+    btnViewList: document.getElementById('btnViewList'),
+    btnSubmitExam: document.getElementById('btnSubmitExam'),
     quizStatsBadge: document.getElementById('quizStatsBadge'),
-    quizPagination: document.getElementById('quizPaginationBar'),
-    typeFilterBtns: document.querySelectorAll('[data-qtype]'),
-    statusFilterBtns: document.querySelectorAll('[data-qstatus]'),
+    quizSheetContainer: document.getElementById('quizSheetContainer'),
+    quizSheetGrid: document.getElementById('quizSheetGrid'),
+    sheetTotalCount: document.getElementById('sheetTotalCount'),
+    sheetUnansweredCount: document.getElementById('sheetUnansweredCount'),
+    sheetSlashedCount: document.getElementById('sheetSlashedCount'),
+    quizSingleCardContainer: document.getElementById('quizSingleCardContainer'),
+    quizQuestionsList: document.getElementById('quizQuestionsList'),
+    quizPaginationBar: document.getElementById('quizPaginationBar'),
     
     // Cases elements
     casesList: document.getElementById('casesList'),
     casesStatsBadge: document.getElementById('casesStatsBadge'),
     
-    // Errors view
-    errorsList: document.getElementById('errorsQuestionsList'),
-    errorsStatsBadge: document.getElementById('errorsStatsBadge'),
-    btnClearErrors: document.getElementById('btnClearErrorsBtn'),
-    
-    // Favorites view
-    favsList: document.getElementById('favoritesQuestionsList'),
-    favsStatsBadge: document.getElementById('favsStatsBadge'),
-    
-    // Stats elements
-    statDoneCount: document.getElementById('statDoneCount'),
-    statAccuracy: document.getElementById('statAccuracy'),
-    statMasteredCards: document.getElementById('statMasteredCards'),
-    statErrorCount: document.getElementById('statErrorCount'),
-    statFavCount: document.getElementById('statFavCount'),
-    btnExportData: document.getElementById('btnExportData'),
-    btnImportData: document.getElementById('btnImportData'),
-    fileImportInput: document.getElementById('fileImportInput'),
-    btnResetData: document.getElementById('btnResetData'),
-    
-    // Modal
+    // Knowledge Modal
     modalOverlay: document.getElementById('knowledgeModal'),
     modalTitle: document.getElementById('modalKnowledgeTitle'),
     modalBody: document.getElementById('modalKnowledgeBody'),
     modalCloseBtn: document.getElementById('modalCloseBtn'),
-    modalGoAnkiBtn: document.getElementById('modalGoAnkiBtn')
+    modalGoAnkiBtn: document.getElementById('modalGoAnkiBtn'),
+    
+    // Mindmap Node Edit Modal
+    mindmapNodeModal: document.getElementById('mindmapNodeModal'),
+    mmEditNodeName: document.getElementById('mmEditNodeName'),
+    mmEditCustomNotes: document.getElementById('mmEditCustomNotes'),
+    mmImgFileInput: document.getElementById('mmImgFileInput'),
+    mmImgUrlInput: document.getElementById('mmImgUrlInput'),
+    btnApplyMmImgUrl: document.getElementById('btnApplyMmImgUrl'),
+    mmImgPreviewBox: document.getElementById('mmImgPreviewBox'),
+    mmImgPreviewThumb: document.getElementById('mmImgPreviewThumb'),
+    btnRemoveMmImg: document.getElementById('btnRemoveMmImg'),
+    btnSaveMmNode: document.getElementById('btnSaveMmNode'),
+    btnResetMmNode: document.getElementById('btnResetMmNode'),
+    
+    // Question Note Modal
+    questionNoteModal: document.getElementById('questionNoteModal'),
+    modalQNoteStem: document.getElementById('modalQNoteStem'),
+    qNoteContentInput: document.getElementById('qNoteContentInput'),
+    qNoteCustomAns: document.getElementById('qNoteCustomAns'),
+    qImgFileInput: document.getElementById('qImgFileInput'),
+    qImgPreviewBox: document.getElementById('qImgPreviewBox'),
+    qImgPreviewThumb: document.getElementById('qImgPreviewThumb'),
+    btnRemoveQImg: document.getElementById('btnRemoveQImg'),
+    btnSaveQNote: document.getElementById('btnSaveQNote'),
+    btnDeleteQNote: document.getElementById('btnDeleteQNote'),
+    
+    // Course Import Modal
+    courseImportModal: document.getElementById('courseImportModal'),
+    coursePkgFileInput: document.getElementById('coursePkgFileInput'),
+    btnConfirmImportCourse: document.getElementById('btnConfirmImportCourse'),
+    btnOpenImportCourseModal: document.getElementById('btnOpenImportCourseModal')
   };
 
-  // ================= Initialization =================
+  // Temp holder for base64 images in modals
+  let tempMmImg = "";
+  let tempQImg = "";
+
+  // ================= App Initialization =================
   function init() {
-    if (store.theme === 'dark') {
-      document.documentElement.setAttribute('data-theme', 'dark');
+    // 1. Set theme
+    document.documentElement.setAttribute('data-theme', store.theme || 'light');
+    
+    // 2. Setup Course Switcher & Header
+    setupCourseSwitcher();
+    renderChapterPills();
+    updateSubTopicPills();
+
+    // 3. Setup event listeners
+    setupEventListeners();
+    
+    // 4. Update badge counters
+    updateBadgesAndStats();
+    
+    // 5. Render active view
+    renderView(state.activeView);
+  }
+
+  // ================= Course Switcher Logic =================
+  function setupCourseSwitcher() {
+    const course = getCourse();
+    if (dom.currentCourseBadge) dom.currentCourseBadge.textContent = course.badge;
+    if (dom.currentCourseName) dom.currentCourseName.textContent = course.name;
+    if (dom.headerSubTag) dom.headerSubTag.textContent = course.shortName + " · 考点闪卡 · 导图 · 题库";
+    if (dom.headerSubDesc) dom.headerSubDesc.textContent = course.desc;
+
+    if (dom.courseSelectBtn && dom.courseDropdownMenu) {
+      dom.courseSelectBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dom.courseDropdownMenu.classList.toggle('show');
+      });
+      document.addEventListener('click', () => {
+        dom.courseDropdownMenu.classList.remove('show');
+      });
+    }
+
+    document.querySelectorAll('.course-opt-item[data-course]').forEach(item => {
+      item.addEventListener('click', () => {
+        const cid = item.getAttribute('data-course');
+        switchActiveCourse(cid);
+      });
+    });
+
+    if (dom.btnOpenImportCourseModal) {
+      dom.btnOpenImportCourseModal.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dom.courseDropdownMenu.classList.remove('show');
+        dom.courseImportModal.classList.add('active');
+      });
+    }
+
+    if (dom.btnConfirmImportCourse && dom.coursePkgFileInput) {
+      dom.btnConfirmImportCourse.addEventListener('click', () => {
+        const file = dom.coursePkgFileInput.files[0];
+        if (!file) {
+          alert('请选择有效的课程包 JSON 文件！');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+            if (CourseManager.registerCourse(data)) {
+              alert(`成功导入学科：${data.name}！已自动为您切换。`);
+              dom.courseImportModal.classList.remove('active');
+              switchActiveCourse(data.id);
+            } else {
+              alert('导入失败，课程包 JSON 数据格式缺少必要字段 (id, name 等)！');
+            }
+          } catch(err) {
+            alert('JSON 解析失败：' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      });
+    }
+  }
+
+  function switchActiveCourse(courseId) {
+    if (typeof CourseManager !== 'undefined') {
+      CourseManager.switchCourse(courseId);
+    }
+    store = loadStore();
+    state.chapter = '全部';
+    state.page = 1;
+    state.ankiIndex = 0;
+    state.activeQuestionIndex = 0;
+    state.examAnswers = {};
+    state.examSubmitted = false;
+
+    // Refresh UI
+    const course = getCourse();
+    if (dom.currentCourseBadge) dom.currentCourseBadge.textContent = course.badge;
+    if (dom.currentCourseName) dom.currentCourseName.textContent = course.name;
+    if (dom.headerSubTag) dom.headerSubTag.textContent = course.shortName + " · 考点闪卡 · 导图 · 题库";
+    if (dom.headerSubDesc) dom.headerSubDesc.textContent = course.desc;
+
+    document.querySelectorAll('.course-opt-item[data-course]').forEach(el => {
+      el.classList.toggle('active', el.getAttribute('data-course') === courseId);
+    });
+
+    renderChapterPills();
+    updateBadgesAndStats();
+    renderCurrentViewContent();
+  }
+
+  // ================= Dynamic Chapter Pills =================
+  function renderChapterPills() {
+    if (!dom.chapterPills) return;
+    const questions = getQuestionsData();
+    const knowledge = getKnowledgeData();
+    
+    // Extract unique chapters from data
+    const chaptersSet = new Set();
+    questions.forEach(q => { if (q.chapter) chaptersSet.add(q.chapter); });
+    knowledge.forEach(k => { if (k.chapter) chaptersSet.add(k.chapter); });
+    
+    const chapters = Array.from(chaptersSet);
+    
+    let html = `<span class="ch-label">章节分类:</span>`;
+    html += `<button class="ch-pill ${state.chapter === '全部' ? 'active' : ''}" data-ch="全部">全部章节</button>`;
+    
+    chapters.forEach(ch => {
+      html += `<button class="ch-pill ${state.chapter === ch ? 'active' : ''}" data-ch="${escapeHtml(ch)}">${escapeHtml(ch)}</button>`;
+    });
+    
+    dom.chapterPills.innerHTML = html;
+    
+    // Bind pill clicks
+    dom.chapterPills.querySelectorAll('.ch-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        dom.chapterPills.querySelectorAll('.ch-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        state.chapter = pill.getAttribute('data-ch');
+        state.qSubTopicFilter = 'all'; // 切换章节时重置细分考点
+        state.page = 1;
+        state.ankiIndex = 0;
+        state.activeQuestionIndex = 0;
+        updateSubTopicPills();
+        renderCurrentViewContent();
+      });
+    });
+  }
+
+  // ================= 医考帮 考点细分胶囊栏 (SubTopic Filter Bar) =================
+  function updateSubTopicPills() {
+    if (!dom.pillsSubTopicFilter || !dom.yikaoSubTopicRow) return;
+    const questions = getQuestionsData();
+    let currentScope = questions;
+    if (state.chapter !== '全部') {
+      currentScope = currentScope.filter(q => isChapterMatch(q.chapter, state.chapter));
     }
     
-    setupEventListeners();
-    updateBadgesAndStats();
-    renderView();
+    // 统计当前章节范围内的考点细分题目数
+    const subTopicCounts = {};
+    currentScope.forEach(q => {
+      const sub = q.subTopic;
+      if (sub) {
+        subTopicCounts[sub] = (subTopicCounts[sub] || 0) + 1;
+      }
+    });
+
+    const subTopics = Object.keys(subTopicCounts);
+    if (subTopics.length === 0) {
+      dom.yikaoSubTopicRow.style.display = 'none';
+      state.qSubTopicFilter = 'all';
+      return;
+    }
+
+    dom.yikaoSubTopicRow.style.display = 'flex';
+    
+    // 如果当前选中的子分类不再属于当前章节，重置为全部
+    if (state.qSubTopicFilter !== 'all' && !subTopics.includes(state.qSubTopicFilter)) {
+      state.qSubTopicFilter = 'all';
+    }
+
+    let pillsHtml = `
+      <button class="yikao-pill ${state.qSubTopicFilter === 'all' ? 'active' : ''}" data-subtopic="all">
+        全部细分考点 (${currentScope.length})
+      </button>
+    `;
+
+    subTopics.forEach(sub => {
+      const count = subTopicCounts[sub];
+      const isActive = state.qSubTopicFilter === sub;
+      pillsHtml += `
+        <button class="yikao-pill ${isActive ? 'active' : ''}" data-subtopic="${escapeHtml(sub)}">
+          ${escapeHtml(sub)} (${count})
+        </button>
+      `;
+    });
+
+    dom.pillsSubTopicFilter.innerHTML = pillsHtml;
+
+    dom.pillsSubTopicFilter.querySelectorAll('.yikao-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        dom.pillsSubTopicFilter.querySelectorAll('.yikao-pill').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.qSubTopicFilter = btn.getAttribute('data-subtopic');
+        state.page = 1;
+        state.activeQuestionIndex = 0;
+        renderQuizView();
+      });
+    });
   }
 
   // ================= Event Listeners =================
   function setupEventListeners() {
     // Theme toggle
-    dom.themeBtn.addEventListener('click', () => {
-      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-      const newTheme = isDark ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', newTheme);
-      store.theme = newTheme;
-      saveStore();
-    });
+    if (dom.themeBtn) {
+      dom.themeBtn.addEventListener('click', () => {
+        store.theme = store.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', store.theme);
+        saveStore();
+      });
+    }
 
-    // Global Search
-    dom.searchInput.addEventListener('input', (e) => {
-      state.searchQuery = e.target.value.trim().toLowerCase();
-      state.page = 1;
-      state.ankiIndex = 0;
-      renderCurrentViewContent();
-    });
+    // Global search
+    if (dom.searchInput) {
+      dom.searchInput.addEventListener('input', (e) => {
+        state.searchQuery = e.target.value.trim().toLowerCase();
+        state.page = 1;
+        state.activeQuestionIndex = 0;
+        renderCurrentViewContent();
+      });
+    }
 
-    // Nav Tabs switching
+    // Nav tabs
     dom.navTabs.forEach(tab => {
       tab.addEventListener('click', () => {
+        const view = tab.getAttribute('data-view');
         dom.navTabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-        state.activeView = tab.getAttribute('data-view');
-        state.page = 1;
-        renderView();
+        renderView(view);
       });
     });
 
-    // Chapter Pills switching
-    dom.chapterPills.addEventListener('click', (e) => {
-      const pill = e.target.closest('.ch-pill');
-      if (!pill) return;
-      document.querySelectorAll('.ch-pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      state.chapter = pill.getAttribute('data-ch');
-      state.page = 1;
-      state.ankiIndex = 0;
-      renderCurrentViewContent();
-    });
+    // 医考帮 斩题过滤 (Row 1)
+    if (dom.pillsSlashFilter) {
+      dom.pillsSlashFilter.querySelectorAll('.yikao-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          dom.pillsSlashFilter.querySelectorAll('.yikao-pill').forEach(p => p.classList.remove('active'));
+          pill.classList.add('active');
+          state.quizSlashFilter = pill.getAttribute('data-slash');
+          state.page = 1;
+          state.activeQuestionIndex = 0;
+          renderQuizView();
+        });
+      });
+    }
+
+    // 医考帮 题型过滤 (Row 2)
+    if (dom.pillsTypeFilter) {
+      dom.pillsTypeFilter.querySelectorAll('.yikao-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          dom.pillsTypeFilter.querySelectorAll('.yikao-pill').forEach(p => p.classList.remove('active'));
+          pill.classList.add('active');
+          state.qTypeFilter = pill.getAttribute('data-qtype');
+          state.page = 1;
+          state.activeQuestionIndex = 0;
+          renderQuizView();
+        });
+      });
+    }
+
+    // 医考帮 分类过滤 (Row 3)
+    if (dom.pillsCategoryFilter) {
+      dom.pillsCategoryFilter.querySelectorAll('.yikao-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          dom.pillsCategoryFilter.querySelectorAll('.yikao-pill').forEach(p => p.classList.remove('active'));
+          pill.classList.add('active');
+          state.qCategoryFilter = pill.getAttribute('data-qcat');
+          state.page = 1;
+          state.activeQuestionIndex = 0;
+          renderQuizView();
+        });
+      });
+    }
+
+    // 医考帮 模式切换 (Row 4)
+    if (dom.pillsModeFilter) {
+      dom.pillsModeFilter.querySelectorAll('.yikao-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          dom.pillsModeFilter.querySelectorAll('.yikao-pill').forEach(p => p.classList.remove('active'));
+          pill.classList.add('active');
+          state.quizMode = pill.getAttribute('data-mode');
+          state.examSubmitted = false;
+          renderQuizView();
+        });
+      });
+    }
+
+    // 题库三视图模式切换 (答题卡全览 vs 单题沉浸 vs 列表流式)
+    if (dom.btnViewSheet) {
+      dom.btnViewSheet.addEventListener('click', () => {
+        state.quizViewMode = 'sheet';
+        updateQuizViewButtons();
+        renderQuizView();
+      });
+    }
+    if (dom.btnViewCard) {
+      dom.btnViewCard.addEventListener('click', () => {
+        state.quizViewMode = 'card';
+        updateQuizViewButtons();
+        renderQuizView();
+      });
+    }
+    if (dom.btnViewList) {
+      dom.btnViewList.addEventListener('click', () => {
+        state.quizViewMode = 'list';
+        updateQuizViewButtons();
+        renderQuizView();
+      });
+    }
+
+    // 考试模式交卷按钮
+    if (dom.btnSubmitExam) {
+      dom.btnSubmitExam.addEventListener('click', () => {
+        handleSubmitExam();
+      });
+    }
 
     // Anki controls
-    dom.ankiCard.addEventListener('click', toggleAnkiFlip);
-    dom.btnAnkiFlip.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleAnkiFlip();
+    if (dom.btnFlipCard) dom.btnFlipCard.addEventListener('click', toggleAnkiFlip);
+    if (dom.ankiCard) dom.ankiCard.addEventListener('click', (e) => {
+      if (!e.target.closest('.anki-rating-btns') && !e.target.closest('.btn-nav')) toggleAnkiFlip();
     });
-
-    dom.btnAnkiPrev.addEventListener('click', (e) => {
-      e.stopPropagation();
-      navigateAnkiCard(-1);
-    });
-
-    dom.btnAnkiNext.addEventListener('click', (e) => {
-      e.stopPropagation();
-      navigateAnkiCard(1);
-    });
-
-    dom.btnRateAgain.addEventListener('click', (e) => {
-      e.stopPropagation();
-      rateAnkiCard('again');
-    });
-
-    dom.btnRateGood.addEventListener('click', (e) => {
-      e.stopPropagation();
-      rateAnkiCard('good');
-    });
-
-    dom.btnRateEasy.addEventListener('click', (e) => {
-      e.stopPropagation();
-      rateAnkiCard('easy');
-    });
-
-    // Keyboard shortcuts for Anki
-    window.addEventListener('keydown', (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      
-      if (state.activeView === 'anki') {
-        if (e.code === 'Space') {
-          e.preventDefault();
-          toggleAnkiFlip();
-        } else if (e.key === '1') {
-          rateAnkiCard('again');
-        } else if (e.key === '2') {
-          rateAnkiCard('good');
-        } else if (e.key === '3') {
-          rateAnkiCard('easy');
-        } else if (e.key === 'ArrowLeft') {
-          navigateAnkiCard(-1);
-        } else if (e.key === 'ArrowRight') {
-          navigateAnkiCard(1);
-        }
-      }
-    });
+    if (dom.btnPrevCard) dom.btnPrevCard.addEventListener('click', () => navigateAnkiCard(-1));
+    if (dom.btnNextCard) dom.btnNextCard.addEventListener('click', () => navigateAnkiCard(1));
+    if (dom.btnRateAgain) dom.btnRateAgain.addEventListener('click', () => rateAnkiCard('again'));
+    if (dom.btnRateGood) dom.btnRateGood.addEventListener('click', () => rateAnkiCard('good'));
+    if (dom.btnRateEasy) dom.btnRateEasy.addEventListener('click', () => rateAnkiCard('easy'));
 
     // Mind Map controls
     if (dom.btnMmExpandAll) {
       dom.btnMmExpandAll.addEventListener('click', () => {
-        document.querySelectorAll('.mm-children').forEach(c => c.classList.add('open'));
-        document.querySelectorAll('.mm-toggle-btn').forEach(b => b.classList.add('expanded'));
+        state.allBranchesOpen = true;
+        renderMindMap();
       });
     }
-
     if (dom.btnMmCollapseAll) {
       dom.btnMmCollapseAll.addEventListener('click', () => {
-        document.querySelectorAll('.mm-children').forEach((c, idx) => {
-          if (idx > 0) c.classList.remove('open');
+        state.allBranchesOpen = false;
+        state.openMmBranches = {};
+        renderMindMap();
+      });
+    }
+    if (dom.btnMmExpandAllKnowledge) {
+      dom.btnMmExpandAllKnowledge.addEventListener('click', () => {
+        state.allBranchesOpen = true;
+        getKnowledgeData().forEach(k => {
+          state.expandedKnowledgeNodes[k.id] = true;
         });
-        document.querySelectorAll('.mm-toggle-btn').forEach((b, idx) => {
-          if (idx > 0) b.classList.remove('expanded');
-        });
+        renderMindMap();
+      });
+    }
+    if (dom.btnMmCollapseAllKnowledge) {
+      dom.btnMmCollapseAllKnowledge.addEventListener('click', () => {
+        state.expandedKnowledgeNodes = {};
+        renderMindMap();
       });
     }
 
-    // Quiz Filter Buttons
-    dom.typeFilterBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        dom.typeFilterBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.qTypeFilter = btn.getAttribute('data-qtype');
-        state.page = 1;
-        renderQuizList();
-      });
-    });
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcuts);
 
-    dom.statusFilterBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        dom.statusFilterBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.qStatusFilter = btn.getAttribute('data-qstatus');
-        state.page = 1;
-        renderQuizList();
-      });
-    });
-
-    // Modal Close
-    dom.modalCloseBtn.addEventListener('click', closeModal);
-    dom.modalOverlay.addEventListener('click', (e) => {
-      if (e.target === dom.modalOverlay) closeModal();
-    });
-
-    // Clear Errors
-    if (dom.btnClearErrors) {
-      dom.btnClearErrors.addEventListener('click', () => {
-        if (confirm('确定要清空错题本记录吗？清空后将重新开始统计。')) {
-          store.wrong = [];
-          saveStore();
-          renderErrorsList();
-        }
-      });
-    }
-
-    // Export / Import / Reset
-    if (dom.btnExportData) dom.btnExportData.addEventListener('click', exportUserData);
-    if (dom.btnImportData) dom.btnImportData.addEventListener('click', () => dom.fileImportInput.click());
-    if (dom.fileImportInput) dom.fileImportInput.addEventListener('change', importUserData);
-    if (dom.btnResetData) {
-      dom.btnResetData.addEventListener('click', () => {
-        if (confirm('警告：重置将清空所有答题记录、错题本、收藏夹和闪卡掌握进度！确定重置吗？')) {
-          store = Object.assign({}, defaultStore);
-          saveStore();
-          location.reload();
-        }
-      });
-    }
+    // Mindmap node edit modal events
+    setupMindmapEditModal();
+    // Question note modal events
+    setupQuestionNoteModal();
   }
 
-  // ================= Chapter Matching Helper =================
-  function isChapterMatch(itemChapter, selectedChapter) {
-    if (!selectedChapter || selectedChapter === '全部') return true;
-    if (!itemChapter) return false;
-    if (itemChapter === selectedChapter) return true;
-    if (itemChapter.includes(selectedChapter) || selectedChapter.includes(itemChapter)) return true;
-    if ((selectedChapter.includes('背') || selectedChapter.includes('脊柱')) && 
-        (itemChapter.includes('背') || itemChapter.includes('脊柱'))) return true;
-    if (selectedChapter === '头颈部' && (itemChapter.includes('头') || itemChapter.includes('颈'))) return true;
-    if (selectedChapter === '头部' && itemChapter.includes('头')) return true;
-    if (selectedChapter === '颈部' && itemChapter.includes('颈')) return true;
-    if (itemChapter === '头颈部' && (selectedChapter === '头部' || selectedChapter === '颈部')) return true;
-    if ((selectedChapter.includes('盆') || selectedChapter.includes('会阴')) &&
-        (itemChapter.includes('盆') || itemChapter.includes('会阴'))) return true;
-    return false;
+  function updateQuizViewButtons() {
+    if (dom.btnViewSheet) dom.btnViewSheet.classList.toggle('active', state.quizViewMode === 'sheet');
+    if (dom.btnViewCard) dom.btnViewCard.classList.toggle('active', state.quizViewMode === 'card');
+    if (dom.btnViewList) dom.btnViewList.classList.toggle('active', state.quizViewMode === 'list');
   }
 
   // ================= View Routing =================
-  function renderView() {
-    dom.views.forEach(v => v.classList.remove('active'));
-    const target = document.getElementById(`view-${state.activeView}`);
-    if (target) {
-      target.classList.add('active');
-    }
+  function renderView(viewName) {
+    state.activeView = viewName;
+    dom.views.forEach(v => {
+      v.classList.remove('active');
+      if (v.id === `view-${viewName}`) v.classList.add('active');
+    });
     renderCurrentViewContent();
   }
 
@@ -374,7 +652,7 @@
         renderMindMap();
         break;
       case 'quiz':
-        renderQuizList();
+        renderQuizView();
         break;
       case 'cases':
         renderCasesList();
@@ -389,32 +667,35 @@
         renderStatsDashboard();
         break;
     }
-    updateBadgesAndStats();
   }
 
-  // ================= Anki Flashcards Engine =================
+  // ================= 1. Anki Flashcards Engine =================
   function getFilteredAnkiCards() {
-    return KnowledgeData.filter(card => {
-      if (!isChapterMatch(card.chapter, state.chapter)) return false;
-      if (state.searchQuery) {
-        const text = (card.title + card.front + card.back + card.keyPoints.join(' ') + (card.clinicalNote || '')).toLowerCase();
-        if (!text.includes(state.searchQuery)) return false;
-      }
-      return true;
-    });
+    let list = getKnowledgeData();
+    if (state.chapter !== '全部') {
+      list = list.filter(k => isChapterMatch(k.chapter, state.chapter));
+    }
+    if (state.searchQuery) {
+      const q = state.searchQuery;
+      list = list.filter(k => 
+        (k.title && k.title.toLowerCase().includes(q)) ||
+        (k.front && k.front.toLowerCase().includes(q)) ||
+        (k.back && k.back.toLowerCase().includes(q))
+      );
+    }
+    return list;
   }
 
   function renderAnkiCard() {
     const cards = getFilteredAnkiCards();
-    if (cards.length === 0) {
-      dom.ankiCardTitle.textContent = '未找到匹配知识点';
-      dom.ankiCardPrompt.textContent = '请尝试清除搜索关键词或切换至其他章节。';
-      dom.ankiCardAnswer.textContent = '';
-      dom.ankiClinicalBox.style.display = 'none';
-      dom.ankiCardTag.textContent = '无数据';
-      dom.ankiCardHint.textContent = '0 / 0';
-      dom.ankiProgressText.textContent = '0%';
-      dom.ankiProgressTrack.style.width = '0%';
+    if (!cards || cards.length === 0) {
+      if (dom.ankiCardTitle) dom.ankiCardTitle.textContent = "无考点";
+      if (dom.ankiFrontText) dom.ankiFrontText.textContent = "当前分类未找到匹配的闪卡";
+      if (dom.ankiBackText) dom.ankiBackText.textContent = "请切换章节分类或清空搜索关键词重试。";
+      if (dom.ankiCardTag) dom.ankiCardTag.textContent = state.chapter;
+      if (dom.ankiCardHint) dom.ankiCardHint.textContent = "0 / 0";
+      if (dom.ankiProgressText) dom.ankiProgressText.textContent = "0%";
+      if (dom.ankiProgressFill) dom.ankiProgressFill.style.width = "0%";
       return;
     }
 
@@ -423,102 +704,137 @@
 
     const card = cards[state.ankiIndex];
     state.ankiFlipped = false;
-    dom.ankiCard.classList.remove('is-flipped');
+    if (dom.ankiCard) dom.ankiCard.classList.remove('flipped');
 
-    dom.ankiCardTag.textContent = `${card.chapter} · ${card.section}`;
-    dom.ankiCardHint.textContent = `闪卡 ${state.ankiIndex + 1} / ${cards.length}`;
-    dom.ankiCardTitle.textContent = card.title;
-    dom.ankiCardPrompt.textContent = card.front;
-    dom.ankiCardAnswer.textContent = card.back;
+    if (dom.ankiCardTitle) dom.ankiCardTitle.textContent = card.title || '核心考点';
+    if (dom.ankiCardTag) dom.ankiCardTag.textContent = `${card.chapter || ''} · ${card.title || ''}`;
+    if (dom.ankiCardHint) dom.ankiCardHint.textContent = `闪卡 #${state.ankiIndex + 1} / ${cards.length}`;
+    if (dom.ankiFrontText) dom.ankiFrontText.textContent = card.front;
+    if (dom.ankiBackText) dom.ankiBackText.textContent = card.back;
+    
+    const pct = Math.round(((state.ankiIndex + 1) / cards.length) * 100);
+    if (dom.ankiProgressText) dom.ankiProgressText.textContent = `${pct}%`;
+    if (dom.ankiProgressFill) dom.ankiProgressFill.style.width = `${pct}%`;
 
-    if (card.clinicalNote) {
-      dom.ankiClinicalBox.style.display = 'block';
-      dom.ankiClinicalText.textContent = card.clinicalNote;
-    } else {
-      dom.ankiClinicalBox.style.display = 'none';
+    // Check if user has custom notes or image on this card
+    const custom = store.mindmapCustom[card.id] || {};
+    let customHtml = '';
+    if (custom.notes) {
+      customHtml += `<div class="mm-leaf-custom-notes" style="margin-top:0.75rem;"><strong>【我的专属笔记】：</strong><br>${escapeHtml(custom.notes)}</div>`;
+    }
+    if (custom.img) {
+      customHtml += `<img class="mm-leaf-img" src="${custom.img}" alt="解剖配图" style="max-height:220px;margin-top:0.5rem;" onclick="window.open('${custom.img}')">`;
     }
 
-    const masteredCount = cards.filter(c => store.masteredCards[c.id] && store.masteredCards[c.id].status === 'easy').length;
-    const pct = Math.round((masteredCount / cards.length) * 100);
-    dom.ankiProgressTrack.style.width = `${pct}%`;
-    dom.ankiProgressText.textContent = `${pct}% 熟练掌握 (${masteredCount}/${cards.length})`;
+    if (dom.ankiClinicalBox && dom.ankiClinicalText) {
+      let extraHtml = '';
+      if (card.mnemonic) {
+        extraHtml += `<div style="margin-bottom:0.4rem;"><span style="color:#059669; font-weight:700;">【记忆口诀】</span> ${escapeHtml(card.mnemonic)}</div>`;
+      }
+      if (card.clinical) {
+        extraHtml += `<div style="margin-bottom:0.4rem;">${escapeHtml(card.clinical)}</div>`;
+      }
+      extraHtml += customHtml;
+      if (extraHtml) {
+        dom.ankiClinicalBox.style.display = 'block';
+        dom.ankiClinicalText.innerHTML = extraHtml;
+      } else {
+        dom.ankiClinicalBox.style.display = 'none';
+      }
+    }
   }
 
   function toggleAnkiFlip() {
     state.ankiFlipped = !state.ankiFlipped;
-    dom.ankiCard.classList.toggle('is-flipped', state.ankiFlipped);
+    if (dom.ankiCard) dom.ankiCard.classList.toggle('flipped', state.ankiFlipped);
   }
 
-  function navigateAnkiCard(direction) {
+  function navigateAnkiCard(step) {
     const cards = getFilteredAnkiCards();
-    if (cards.length === 0) return;
-    state.ankiIndex = (state.ankiIndex + direction + cards.length) % cards.length;
+    if (!cards.length) return;
+    state.ankiIndex = (state.ankiIndex + step + cards.length) % cards.length;
     renderAnkiCard();
   }
 
   function rateAnkiCard(rating) {
     const cards = getFilteredAnkiCards();
-    if (cards.length === 0) return;
+    if (!cards.length) return;
     const card = cards[state.ankiIndex];
-    
-    if (!store.masteredCards[card.id]) {
-      store.masteredCards[card.id] = { status: rating, count: 0 };
-    }
-    store.masteredCards[card.id].status = rating;
-    store.masteredCards[card.id].count += 1;
+    store.masteredCards[card.id] = { status: rating, time: Date.now() };
     saveStore();
-
     navigateAnkiCard(1);
   }
 
-  // ================= Mind Map Interactive Tree Engine =================
+  // ================= 2. Mind Map Engine (内嵌展示与自主图文编辑) =================
   function renderMindMap() {
-    if (!dom.mmTree || !MindMapData) return;
-
-    // Filter tree according to current chapter
-    let root = MindMapData;
-    if (state.chapter !== '全部') {
-      const matchChild = MindMapData.children.find(c => isChapterMatch(c.chapter, state.chapter) || isChapterMatch(c.name, state.chapter));
-      if (matchChild) {
-        root = {
-          name: `局部解剖学 - ${state.chapter}`,
-          chapter: state.chapter,
-          desc: matchChild.desc,
-          children: [matchChild]
-        };
-      }
+    if (!dom.mindmapTree) return;
+    const data = getMindMapData();
+    if (!data) {
+      dom.mindmapTree.innerHTML = `<div class="empty-state">当前学科暂无思维导图数据</div>`;
+      return;
     }
-
-    dom.mmTree.innerHTML = renderTreeNodeHtml(root, 0, true);
-    
-    // Select root or first child by default in inspector
-    if (!state.selectedNode) {
-      inspectMindMapNode(root.name, root.desc, root.chapter, null);
-    }
+    dom.mindmapTree.innerHTML = renderTreeNodeHtml(data, 0, true);
   }
 
-  function renderTreeNodeHtml(node, level, isOpen = false) {
+  function renderTreeNodeHtml(node, level) {
     const hasChildren = node.children && node.children.length > 0;
-    const nodeId = 'mm-node-' + Math.random().toString(36).substr(2, 9);
+    const nodeId = 'mm_' + Math.random().toString(36).substr(2, 9);
+    const isLeafKnowledge = !!node.kbId;
+    const custom = (node.kbId && store.mindmapCustom[node.kbId]) || {};
+    const isInlineExpanded = !!state.expandedKnowledgeNodes[node.kbId];
+    
+    // 判定当前分支是否展开：若处于全展开模式或用户主动展开过，则保持开启
+    const isBranchOpen = state.allBranchesOpen || (state.openMmBranches[node.name] !== undefined ? state.openMmBranches[node.name] : (level < 1));
 
     let html = `
-      <div class="mm-node level-${level}" id="${nodeId}">
+      <div class="mm-node level-${level}" id="${nodeId}" data-kbid="${node.kbId || ''}" data-nodename="${escapeHtml(node.name)}">
         <div class="mm-node-row" onclick="window.APP.selectMmNode('${nodeId}', '${escapeHtml(node.name)}', '${escapeHtml(node.desc || '')}', '${node.chapter || ''}', '${node.kbId || ''}')">
           ${hasChildren ? `
-            <button class="mm-toggle-btn ${isOpen ? 'expanded' : ''}" onclick="window.APP.toggleMmNode(event, '${nodeId}')">
+            <button class="mm-toggle-btn ${isBranchOpen ? 'expanded' : ''}" onclick="window.APP.toggleMmNode(event, '${nodeId}')">
               ${SVG.chevronRight}
             </button>
-          ` : `<span style="width:20px; display:inline-block; text-align:center; color:var(--teal);">•</span>`}
-          <span class="mm-node-label">${node.name}</span>
+          ` : `<span style="width:20px; display:inline-block; text-align:center; color:var(--primary); font-weight:700;">•</span>`}
+          <span class="mm-node-label">${escapeHtml(node.name)}</span>
           ${hasChildren ? `<span class="mm-badge">${node.children.length}</span>` : ''}
-          ${node.kbId ? `<span class="mm-badge" style="color:var(--primary); font-weight:700;">考点</span>` : ''}
+          ${isLeafKnowledge ? `
+            <span class="mm-badge" style="color:var(--primary); font-weight:700;">考点</span>
+            ${custom.notes || custom.img ? `<span class="mm-badge" style="background:#fef3c7; color:#d97706; font-weight:700;">有笔记/图</span>` : ''}
+            <button class="btn-nav mm-leaf-toggle-btn" style="padding:0.2rem 0.5rem; font-size:0.75rem; margin-left:0.5rem;" onclick="window.APP.toggleLeafKnowledge(event, '${node.kbId}')">
+              ${isInlineExpanded ? '收起知识' : '展开知识'}
+            </button>
+          ` : ''}
         </div>
     `;
 
+    // 叶子节点内嵌直接展示知识卡片
+    if (isLeafKnowledge && isInlineExpanded) {
+      const card = getKnowledgeData().find(k => k.id === node.kbId) || {};
+      html += `
+        <div class="mm-leaf-knowledge-box">
+          <div class="mm-leaf-prompt">【考点引导】：${escapeHtml(card.front || node.desc || '')}</div>
+          <div class="mm-leaf-back">${escapeHtml(card.back || '')}</div>
+          ${card.mnemonic ? `<div class="mm-leaf-mnemonic">【记忆口诀】：${escapeHtml(card.mnemonic)}</div>` : ''}
+          ${custom.notes ? `<div class="mm-leaf-custom-notes"><strong>【我的个性化笔记】：</strong><br>${escapeHtml(custom.notes)}</div>` : ''}
+          ${custom.img ? `<img class="mm-leaf-img" src="${custom.img}" alt="解剖配图" onclick="window.open('${custom.img}')" title="点击放大图片">` : ''}
+          <div class="mm-leaf-actions">
+            <button class="btn-nav" style="background:var(--primary); color:#fff; border-color:var(--primary); font-size:0.78rem;" onclick="window.APP.openMmNodeEditModal('${node.kbId}', '${escapeHtml(node.name)}')">
+              ${SVG.edit} 自主编辑/添加配图
+            </button>
+            <button class="btn-nav" style="font-size:0.78rem;" onclick="window.APP.goToAnkiCard('${node.kbId}')">
+              ${SVG.book} 前往闪卡背诵
+            </button>
+            <button class="btn-nav" style="font-size:0.78rem;" onclick="window.APP.switchChapterAndQuiz('${node.chapter || ''}')">
+              ${SVG.arrowRight} 测评相关题目
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
     if (hasChildren) {
       html += `
-        <div class="mm-children ${isOpen ? 'open' : ''}">
-          ${node.children.map(child => renderTreeNodeHtml(child, level + 1, level < 1)).join('')}
+        <div class="mm-children ${isBranchOpen ? 'open' : ''}">
+          ${node.children.map(child => renderTreeNodeHtml(child, level + 1)).join('')}
         </div>
       `;
     }
@@ -527,321 +843,471 @@
     return html;
   }
 
-  function toggleMindMapNode(e, nodeId) {
-    e.stopPropagation();
-    const el = document.getElementById(nodeId);
-    if (!el) return;
-    const btn = el.querySelector('.mm-toggle-btn');
-    const childContainer = el.querySelector('.mm-children');
-    if (btn && childContainer) {
-      btn.classList.toggle('expanded');
-      childContainer.classList.toggle('open');
+  function toggleMindMapNode(event, nodeId) {
+    event.stopPropagation();
+    const nodeEl = document.getElementById(nodeId);
+    if (!nodeEl) return;
+    const btn = nodeEl.querySelector(':scope > .mm-node-row > .mm-toggle-btn');
+    const children = nodeEl.querySelector(':scope > .mm-children');
+    if (children && btn) {
+      const willOpen = !children.classList.contains('open');
+      children.classList.toggle('open', willOpen);
+      btn.classList.toggle('expanded', willOpen);
+      const name = nodeEl.getAttribute('data-nodename');
+      if (name) state.openMmBranches[name] = willOpen;
     }
+  }
+
+  function toggleLeafKnowledge(event, kbId) {
+    if (event) event.stopPropagation();
+    state.expandedKnowledgeNodes[kbId] = !state.expandedKnowledgeNodes[kbId];
+    renderMindMap();
   }
 
   function inspectMindMapNode(name, desc, chapter, kbId) {
     if (!dom.inspectorTitle) return;
     dom.inspectorTitle.textContent = name;
-    dom.inspectorDesc.textContent = desc || '该解剖结构是局部解剖学核心知识骨架的重要组成部分。';
+    
+    let fullDesc = desc || '该解剖结构是核心知识骨架的重要组成部分。';
+    const custom = (kbId && store.mindmapCustom[kbId]) || {};
+    
+    let html = `<p style="font-size:0.88rem; line-height:1.6; margin-bottom:0.75rem;">${escapeHtml(fullDesc)}</p>`;
+    
+    if (custom.notes) {
+      html += `<div class="mm-leaf-custom-notes" style="margin-bottom:0.75rem;"><strong>【我的专属笔记】：</strong><br>${escapeHtml(custom.notes)}</div>`;
+    }
+    if (custom.img) {
+      html += `<img class="mm-leaf-img" src="${custom.img}" alt="解剖配图" style="max-height:220px;margin-bottom:0.75rem;" onclick="window.open('${custom.img}')">`;
+    }
+    
+    if (dom.inspectorDesc) dom.inspectorDesc.innerHTML = html;
 
     let actionsHtml = '';
     if (kbId) {
       actionsHtml += `
         <button class="btn-nav" style="background:var(--primary); color:#fff; border-color:var(--primary);" onclick="window.APP.openKnowledgeModal('${kbId}')">
-          ${SVG.book} 查阅权威解剖精析
+          ${SVG.book} 查阅权威考点精析
+        </button>
+        <button class="btn-nav" onclick="window.APP.openMmNodeEditModal('${kbId}', '${escapeHtml(name)}')">
+          ${SVG.edit} 自主编辑/添加配图
         </button>
       `;
     }
     if (chapter && chapter !== '全部') {
       actionsHtml += `
         <button class="btn-nav" onclick="window.APP.switchChapterAndQuiz('${chapter}')">
-          ${SVG.arrowRight} 测评本章节相关题目
+          ${SVG.arrowRight} 测评本章节相关试题
         </button>
       `;
     }
-
-    dom.inspectorActions.innerHTML = actionsHtml;
+    if (dom.inspectorActions) dom.inspectorActions.innerHTML = actionsHtml;
   }
 
-  // ================= Quiz & Testing Engine =================
-  function getFilteredQuestions(customFilter = null) {
-    return QuestionsData.filter(q => {
-      if (customFilter && !customFilter(q)) return false;
+  // ================= 3. 医考帮风格 题库测评引擎 (全览矩阵 + 智能斩题 + 模式切换) =================
+  function getFilteredQuestions() {
+    let list = getQuestionsData();
 
-      if (!isChapterMatch(q.chapter, state.chapter)) return false;
-
-      if (state.qTypeFilter !== 'all') {
-        if (q.type !== state.qTypeFilter) return false;
-      }
-
-      if (state.qStatusFilter !== 'all') {
-        const isAnswered = !!store.answered[q.id];
-        const isWrong = store.wrong.includes(q.id);
-        const isStarred = store.starred.includes(q.id);
-        const isCorrect = isAnswered && store.answered[q.id].isCorrect;
-
-        if (state.qStatusFilter === 'unanswered' && isAnswered) return false;
-        if (state.qStatusFilter === 'wrong' && !isWrong) return false;
-        if (state.qStatusFilter === 'correct' && !isCorrect) return false;
-        if (state.qStatusFilter === 'starred' && !isStarred) return false;
-      }
-
-      if (state.searchQuery) {
-        const optText = Object.values(q.options || {}).join(' ');
-        const text = (q.stem + optText + q.chapter + q.answer).toLowerCase();
-        if (!text.includes(state.searchQuery)) return false;
-      }
-
-      return true;
-    });
-  }
-
-  function renderQuizList() {
-    const list = getFilteredQuestions();
-    renderQuestionCards(list, dom.quizList, dom.quizPagination, dom.quizStatsBadge);
-  }
-
-  function renderErrorsList() {
-    const list = getFilteredQuestions(q => store.wrong.includes(q.id));
-    renderQuestionCards(list, dom.errorsList, null, dom.errorsStatsBadge, true);
-  }
-
-  function renderFavoritesList() {
-    const list = getFilteredQuestions(q => store.starred.includes(q.id));
-    renderQuestionCards(list, dom.favsList, null, dom.favsStatsBadge, false, true);
-  }
-
-  function renderQuestionCards(questions, container, paginationContainer, statsContainer, isErrorView = false, isFavView = false) {
-    if (!container) return;
-
-    if (statsContainer) {
-      statsContainer.innerHTML = `共 <b>${questions.length}</b> 道题目`;
+    // 1. 章节筛选
+    if (state.chapter !== '全部') {
+      list = list.filter(q => isChapterMatch(q.chapter, state.chapter));
     }
 
-    if (questions.length === 0) {
-      container.innerHTML = `
-        <div class="empty-box">
-          <div class="empty-icon-wrap">${SVG.info}</div>
-          <h3>${isErrorView ? '错题本已清空' : isFavView ? '暂无收藏题目' : '未找到符合条件的题目'}</h3>
-          <p>${isErrorView ? '你做错的题目会自动收录至此，方便随时专项攻克。' : isFavView ? '在答题时点击右上角星标，即可收藏重点难点题目。' : '请尝试调整筛选条件或搜索关键词。'}</p>
+    // 1.5 细分考点过滤 (SubTopic)
+    if (state.qSubTopicFilter && state.qSubTopicFilter !== 'all') {
+      list = list.filter(q => q.subTopic === state.qSubTopicFilter);
+    }
+
+    // 2. 斩题过滤 (Row 1: 全部 | 已斩 | 未斩)
+    if (state.quizSlashFilter === 'slashed') {
+      list = list.filter(q => store.slashed.includes(q.id));
+    } else if (state.quizSlashFilter === 'unslashed') {
+      list = list.filter(q => !store.slashed.includes(q.id));
+    }
+
+    // 3. 题型过滤 (Row 2: 全部 | A1 | A2 | X)
+    if (state.qTypeFilter === 'A') {
+      list = list.filter(q => q.type === 'A' && (!q.typeLabel || !q.typeLabel.includes('A2')));
+    } else if (state.qTypeFilter === 'A2') {
+      list = list.filter(q => q.typeLabel && q.typeLabel.includes('A2'));
+    } else if (state.qTypeFilter === 'X') {
+      list = list.filter(q => q.type === 'X');
+    }
+
+    // 4. 分类过滤 (Row 3: 全部 | 做错的 | 收藏的 | 未做的)
+    if (state.qCategoryFilter === 'wrong') {
+      list = list.filter(q => store.wrong.includes(q.id));
+    } else if (state.qCategoryFilter === 'starred') {
+      list = list.filter(q => store.starred.includes(q.id));
+    } else if (state.qCategoryFilter === 'unanswered') {
+      list = list.filter(q => !store.answered[q.id]);
+    }
+
+    // 5. 关键词搜索
+    if (state.searchQuery) {
+      const s = state.searchQuery;
+      list = list.filter(q => 
+        (q.stem && q.stem.toLowerCase().includes(s)) ||
+        (q.subTopic && q.subTopic.toLowerCase().includes(s)) ||
+        (q.chapter && q.chapter.toLowerCase().includes(s)) ||
+        Object.values(q.options || {}).some(opt => opt && opt.toLowerCase().includes(s))
+      );
+    }
+
+    return list;
+  }
+
+  function renderQuizView() {
+    const list = getFilteredQuestions();
+    const allQuestions = getQuestionsData();
+
+    // Update stats counts
+    const unansweredCount = list.filter(q => !store.answered[q.id]).length;
+    const slashedCount = list.filter(q => store.slashed.includes(q.id)).length;
+    const totalCount = list.length;
+
+    if (dom.sheetTotalCount) dom.sheetTotalCount.textContent = totalCount;
+    if (dom.sheetUnansweredCount) dom.sheetUnansweredCount.textContent = unansweredCount;
+    if (dom.sheetSlashedCount) dom.sheetSlashedCount.textContent = slashedCount;
+    if (dom.quizStatsBadge) {
+      const modeText = { practice: '练习模式', speed: '快刷模式', exam: '测试模式', recite: '背题模式' }[state.quizMode] || '练习模式';
+      dom.quizStatsBadge.textContent = `${modeText} · 共 ${totalCount} 题`;
+    }
+
+    if (dom.btnSubmitExam) {
+      dom.btnSubmitExam.style.display = (state.quizMode === 'exam' && !state.examSubmitted) ? 'inline-flex' : 'none';
+    }
+
+    // View Routing between 3 sub-views: sheet, card, list
+    if (state.quizViewMode === 'sheet') {
+      if (dom.quizSheetContainer) dom.quizSheetContainer.style.display = 'block';
+      if (dom.quizSingleCardContainer) dom.quizSingleCardContainer.style.display = 'none';
+      if (dom.quizQuestionsList) dom.quizQuestionsList.style.display = 'none';
+      if (dom.quizPaginationBar) dom.quizPaginationBar.style.display = 'none';
+      renderAnswerSheet(list);
+    } else if (state.quizViewMode === 'card') {
+      if (dom.quizSheetContainer) dom.quizSheetContainer.style.display = 'none';
+      if (dom.quizSingleCardContainer) dom.quizSingleCardContainer.style.display = 'block';
+      if (dom.quizQuestionsList) dom.quizQuestionsList.style.display = 'none';
+      if (dom.quizPaginationBar) dom.quizPaginationBar.style.display = 'none';
+      renderSingleQuestionCard(list);
+    } else {
+      if (dom.quizSheetContainer) dom.quizSheetContainer.style.display = 'none';
+      if (dom.quizSingleCardContainer) dom.quizSingleCardContainer.style.display = 'none';
+      if (dom.quizQuestionsList) dom.quizQuestionsList.style.display = 'flex';
+      if (dom.quizPaginationBar) dom.quizPaginationBar.style.display = 'flex';
+      renderQuizListView(list);
+    }
+  }
+
+  // 医考帮 答题卡矩阵渲染 (Answer Sheet Grid)
+  function renderAnswerSheet(list) {
+    if (!dom.quizSheetGrid) return;
+    if (!list || list.length === 0) {
+      dom.quizSheetGrid.innerHTML = `
+        <div style="grid-column:1/-1; padding:3rem; text-align:center; color:var(--text-muted);">
+          未找到符合当前筛选条件的题目。请尝试在上方切换「斩题」、「题型」或「分类」标签。
         </div>
       `;
-      if (paginationContainer) paginationContainer.innerHTML = '';
       return;
     }
 
-    let pageItems = questions;
-    if (paginationContainer) {
-      const totalPages = Math.ceil(questions.length / state.pageSize);
-      if (state.page > totalPages) state.page = totalPages;
-      const start = (state.page - 1) * state.pageSize;
-      pageItems = questions.slice(start, start + state.pageSize);
-      renderPagination(paginationContainer, totalPages);
-    }
-
     let html = '';
-    pageItems.forEach((q) => {
-      const isStarred = store.starred.includes(q.id);
+    list.forEach((q, idx) => {
       const isAnswered = !!store.answered[q.id];
-      const ansRecord = store.answered[q.id];
-      const typeBadgeClass = q.type === 'A' ? 'badge-a' : 'badge-x';
+      const ansInfo = store.answered[q.id];
+      const isCorrect = ansInfo && ansInfo.isCorrect;
+      const isWrong = ansInfo && !ansInfo.isCorrect;
+      const isSlashed = store.slashed.includes(q.id);
+      const isStarred = store.starred.includes(q.id);
+      const isActive = idx === state.activeQuestionIndex;
+
+      let bubbleClass = 'sheet-bubble';
+      if (isSlashed) bubbleClass += ' slashed';
+      else if (isCorrect) bubbleClass += ' correct';
+      else if (isWrong) bubbleClass += ' wrong';
+      else bubbleClass += ' unanswered';
+
+      if (isActive) bubbleClass += ' active-q';
+
+      const tooltip = `#${q.num || idx + 1} [${q.subTopic || q.chapter}]: ${escapeHtml(q.stem || '').substring(0, 45)}...`;
 
       html += `
-        <div class="q-card" id="card-${q.id}" data-qid="${q.id}">
-          <div class="q-header">
-            <div class="q-meta">
-              <span class="q-badge ${typeBadgeClass}">${q.typeLabel}</span>
-              <span class="q-badge badge-chapter">${q.chapter}</span>
-              <span style="font-size:0.8rem; color:var(--text-muted); font-weight:600;">#${q.num}</span>
-            </div>
-            <div class="q-actions">
-              ${isErrorView ? `<button class="btn-nav" onclick="window.APP.removeError('${q.id}')" style="font-size:0.75rem; padding:0.25rem 0.6rem; color:var(--success);">移出错题本</button>` : ''}
-              <button class="star-btn ${isStarred ? 'active' : ''}" onclick="window.APP.toggleStar('${q.id}')" title="收藏题目">
-                ${SVG.star}
-              </button>
-            </div>
-          </div>
-
-          <div class="q-stem">${q.num}. ${q.stem}</div>
-
-          <div class="options-grid" data-qid="${q.id}" data-type="${q.type}">
-            ${renderOptionsHtml(q, ansRecord)}
-          </div>
-
-          ${q.type === 'X' && !isAnswered ? `
-            <div class="x-submit-bar">
-              <button class="btn-submit-x" onclick="window.APP.submitXQuestion('${q.id}')">提交多选答案</button>
-            </div>
-          ` : ''}
-
-          ${isAnswered ? renderExplanationHtml(q, ansRecord) : `
-            <div style="text-align:right;">
-              <button class="btn-nav" style="font-size:0.75rem; padding:0.25rem 0.6rem;" onclick="window.APP.showAnswerEarly('${q.id}')">查看答案与解析</button>
-            </div>
-          `}
-        </div>
-      `;
-    });
-
-    container.innerHTML = html;
-  }
-
-  function renderOptionsHtml(q, ansRecord) {
-    const opts = q.options || {};
-    let html = '';
-    const letters = ['A', 'B', 'C', 'D', 'E'];
-    const isAnswered = !!ansRecord;
-    const userAns = ansRecord ? ansRecord.userAnswer : '';
-    const correctAns = q.answer || '';
-    const tempX = state.xSelections[q.id] || new Set();
-
-    letters.forEach(letter => {
-      if (!opts[letter]) return;
-
-      let btnClass = 'option-btn';
-      if (isAnswered) {
-        const isUserPick = userAns.includes(letter);
-        const isRealCorrect = correctAns.includes(letter);
-
-        if (isRealCorrect) {
-          btnClass += ' correct';
-        } else if (isUserPick && !isRealCorrect) {
-          btnClass += ' wrong';
-        }
-      } else {
-        if (q.type === 'X' && tempX.has(letter)) {
-          btnClass += ' selected';
-        }
-      }
-
-      html += `
-        <button class="${btnClass}" onclick="window.APP.selectOption('${q.id}', '${letter}')">
-          <span class="opt-key">${letter}</span>
-          <span class="opt-text">${opts[letter]}</span>
+        <button class="${bubbleClass}" title="${tooltip}" onclick="window.APP.jumpToQuestionIndex(${idx})">
+          ${q.num || idx + 1}
+          ${isStarred ? `<span class="sheet-star-badge" title="已收藏"></span>` : ''}
         </button>
       `;
     });
+
+    dom.quizSheetGrid.innerHTML = html;
+  }
+
+  // 单题沉浸模式渲染 (Single Card Mode)
+  function renderSingleQuestionCard(list) {
+    if (!dom.quizSingleCardContainer) return;
+    if (!list || list.length === 0) {
+      dom.quizSingleCardContainer.innerHTML = `<div class="empty-state">当前列表无题目</div>`;
+      return;
+    }
+
+    if (state.activeQuestionIndex >= list.length) state.activeQuestionIndex = list.length - 1;
+    if (state.activeQuestionIndex < 0) state.activeQuestionIndex = 0;
+
+    const q = list[state.activeQuestionIndex];
+    const isFirst = state.activeQuestionIndex === 0;
+    const isLast = state.activeQuestionIndex === list.length - 1;
+
+    let cardHtml = `
+      <div style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center;">
+        <button class="btn-nav" onclick="window.APP.switchToSheetView()">
+          ${SVG.chevronRight} 返回答题卡矩阵全览
+        </button>
+        <span style="font-weight:700; font-size:0.9rem; color:var(--text-muted);">
+          第 ${state.activeQuestionIndex + 1} / ${list.length} 题
+        </span>
+      </div>
+    `;
+
+    cardHtml += renderSingleCardHtml(q);
+
+    cardHtml += `
+      <div class="single-card-nav-bar">
+        <button class="btn-nav" ${isFirst ? 'disabled style="opacity:0.4;"' : ''} onclick="window.APP.navigateQuestionIndex(-1)">
+          上一题
+        </button>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn-nav" onclick="window.APP.switchToSheetView()">
+            答题卡全览
+          </button>
+          <button class="btn-slash ${store.slashed.includes(q.id) ? 'slashed' : ''}" onclick="window.APP.toggleSlash('${q.id}')">
+            ${SVG.slash} ${store.slashed.includes(q.id) ? '已斩 (点击恢复)' : '斩此题 (已掌握)'}
+          </button>
+        </div>
+        <button class="btn-nav" ${isLast ? 'disabled style="opacity:0.4;"' : ''} onclick="window.APP.navigateQuestionIndex(1)">
+          下一题
+        </button>
+      </div>
+    `;
+
+    dom.quizSingleCardContainer.innerHTML = cardHtml;
+  }
+
+  // 连续流式列表模式渲染 (List View)
+  function renderQuizListView(list) {
+    if (!dom.quizQuestionsList) return;
+    renderQuestionCards(dom.quizQuestionsList, list, true);
+  }
+
+  // 渲染题目通用 HTML 卡片
+  function renderSingleCardHtml(q) {
+    const isStarred = store.starred.includes(q.id);
+    const isSlashed = store.slashed.includes(q.id);
+    const ansInfo = store.answered[q.id];
+    const isAnswered = !!ansInfo || (state.quizMode === 'recite');
+    const isRecite = state.quizMode === 'recite';
+    const userNote = store.questionNotes[q.id] || {};
+
+    let html = `
+      <div class="question-card" id="qcard-${q.id}" data-qid="${q.id}">
+        <div class="q-header">
+          <div class="q-tags">
+            <span class="q-tag type">${q.type === 'X' ? 'X型题 (多选题)' : (q.typeLabel || 'A型题')}</span>
+            <span class="q-tag ch">${escapeHtml(q.chapter || '')}</span>
+            ${q.subTopic ? `<span class="q-tag ch" style="background:rgba(37,99,235,0.08);color:var(--primary);">${escapeHtml(q.subTopic)}</span>` : ''}
+            <span class="q-tag" style="color:var(--text-muted); font-weight:700;">#${q.num || ''}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:0.4rem;">
+            <button class="btn-slash ${isSlashed ? 'slashed' : ''}" onclick="window.APP.toggleSlash('${q.id}')" title="斩题：标记为完全掌握">
+              ${SVG.slash} ${isSlashed ? '已斩' : '斩'}
+            </button>
+            <button class="star-btn ${isStarred ? 'active' : ''}" onclick="window.APP.toggleStar('${q.id}')" title="${isStarred ? '取消收藏' : '收藏此题'}">
+              ${SVG.star}
+            </button>
+            <button class="btn-nav" style="padding:0.35rem 0.65rem; font-size:0.78rem;" onclick="window.APP.openQNoteModal('${q.id}')">
+              ${SVG.edit} ${userNote.note || userNote.customAns ? '编辑笔记' : '添加笔记'}
+            </button>
+          </div>
+        </div>
+
+        <div class="q-stem">${escapeHtml(q.stem || '')}</div>
+        <div class="q-options" id="qopts-${q.id}">
+          ${renderOptionsHtml(q, isAnswered, ansInfo, isRecite)}
+        </div>
+        ${q.type === 'X' && !isAnswered && state.quizMode !== 'recite' ? `
+          <div style="margin-top:1rem; display:flex; justify-content:flex-end;">
+            <button class="btn-nav" style="background:var(--primary); color:#fff; border-color:var(--primary);" onclick="window.APP.submitX('${q.id}')">
+              提交多选答案
+            </button>
+          </div>
+        ` : ''}
+
+        <div class="q-explanation ${(isAnswered || isRecite) ? 'show' : ''}" id="qexp-${q.id}">
+          ${renderExplanationHtml(q)}
+        </div>
+
+        ${(userNote.note || userNote.customAns || userNote.img) ? `
+          <div class="user-qnote-box">
+            <div class="user-qnote-header">
+              <span>【我的专属解析与答题心得】</span>
+              <button class="btn-nav" style="padding:2px 8px; font-size:0.75rem;" onclick="window.APP.openQNoteModal('${q.id}')">编辑</button>
+            </div>
+            ${userNote.customAns ? `<div style="font-size:0.84rem; font-weight:700; color:#d97706; margin-bottom:0.3rem;">我的自拟/纠错答案：${escapeHtml(userNote.customAns)}</div>` : ''}
+            ${userNote.note ? `<div class="user-qnote-text">${escapeHtml(userNote.note)}</div>` : ''}
+            ${userNote.img ? `<img class="user-qnote-img" src="${userNote.img}" alt="题目附图" onclick="window.open('${userNote.img}')">` : ''}
+          </div>
+        ` : ''}
+      </div>
+    `;
 
     return html;
   }
 
-  function renderExplanationHtml(q, ansRecord) {
-    const isCorrect = ansRecord ? ansRecord.isCorrect : false;
-    const userAns = ansRecord ? ansRecord.userAnswer : '未作答';
-    
-    let linkHtml = '';
+  function renderOptionsHtml(q, isAnswered, ansInfo, isRecite) {
+    const opts = q.options || {};
+    const keys = Object.keys(opts).sort();
+    const correctAns = (q.answer || '').toUpperCase();
+    const userAns = ansInfo ? (ansInfo.userAnswer || '') : '';
+    const isExam = state.quizMode === 'exam' && !state.examSubmitted;
+
+    return keys.map(k => {
+      const optText = opts[k] || '';
+      let statusClass = '';
+
+      if (isRecite) {
+        // 背题模式直接高亮正确答案
+        if (correctAns.includes(k)) statusClass = 'correct';
+      } else if (isAnswered && !isExam) {
+        const isOptCorrect = correctAns.includes(k);
+        const isUserPicked = userAns.includes(k);
+        if (isOptCorrect) statusClass = 'correct';
+        else if (isUserPicked && !isOptCorrect) statusClass = 'wrong';
+      } else if (isExam) {
+        const selected = (state.examAnswers[q.id] || []).includes(k);
+        if (selected) statusClass = 'selected';
+      } else if (q.type === 'X') {
+        const set = state.xSelections[q.id] || new Set();
+        if (set.has(k)) statusClass = 'selected';
+      }
+
+      return `
+        <div class="option-item ${statusClass}" onclick="window.APP.selectOption('${q.id}', '${k}', '${q.type}')">
+          <div class="option-letter">${k}</div>
+          <div class="option-text">${escapeHtml(optText)}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderExplanationHtml(q) {
+    let html = `
+      <div class="ans-label">
+        官方正解: <strong style="color:var(--success); font-size:1.15rem; margin-left:0.25rem;">${q.answer || '暂无'}</strong>
+      </div>
+      <div class="exp-text">${escapeHtml(q.explanation || '本题暂无详细解析')}</div>
+    `;
+
     if (q.linkedKnowledge && q.linkedKnowledge.length > 0) {
-      linkHtml = `
-        <div class="knowledge-links">
-          <span style="font-size:0.8rem; font-weight:700; color:var(--teal);">关联考点：</span>
-          ${q.linkedKnowledge.map(k => `
-            <span class="k-link-pill" onclick="window.APP.openKnowledgeModal('${k.id}')">
-              ${k.title}
-            </span>
-          `).join('')}
+      html += `
+        <div class="linked-kb-box">
+          <div style="font-weight:700; color:var(--text-muted); font-size:0.8rem; margin-bottom:0.35rem;">关联考点:</div>
+          <div class="linked-chips">
+            ${q.linkedKnowledge.map(k => `
+              <span class="linked-chip" onclick="window.APP.openKnowledgeModal('${k.id}')">
+                ${SVG.book} ${escapeHtml(k.title)}
+              </span>
+            `).join('')}
+          </div>
         </div>
       `;
     }
 
-    return `
-      <div class="q-explanation">
-        <div class="exp-header">
-          <span class="exp-ans ${isCorrect ? 'text-success' : 'text-danger'}">
-            ${ansRecord ? (isCorrect ? '回答正确' : `回答错误（你的选择: ${userAns}）`) : '参考答案揭示'}
-          </span>
-          <span style="font-weight:700; color:var(--text-main);">官方标准答案: <span style="color:var(--primary); font-size:1.1rem;">${q.answer}</span></span>
+    const userNote = store.questionNotes[q.id] || {};
+    if (!userNote.note && !userNote.customAns && !userNote.img) {
+      html += `
+        <div style="margin-top:0.75rem; padding-top:0.65rem; border-top:1px dashed var(--border);">
+          <button class="btn-nav" style="font-size:0.78rem; padding:0.3rem 0.65rem; border-color:rgba(37,99,235,0.4); color:var(--primary);" onclick="window.APP.openQNoteModal('${q.id}')">
+            ${SVG.edit} 自主补充本题笔记、自拟解析与配图
+          </button>
         </div>
-        <div class="exp-body">${q.explanation || '暂无详细解析。'}</div>
-        ${linkHtml}
-      </div>
-    `;
+      `;
+    }
+
+    return html;
   }
 
-  function renderPagination(container, totalPages) {
-    if (totalPages <= 1) {
-      container.innerHTML = '';
+  // 选项点击响应 (根据当前模式 Practice / Speed / Exam / Recite)
+  function handleSelectOption(qId, letter, qType) {
+    const list = getQuestionsData();
+    const q = list.find(item => item.id === qId);
+    if (!q) return;
+
+    if (state.quizMode === 'recite') return; // 背题模式点击不触发
+
+    if (state.quizMode === 'exam' && !state.examSubmitted) {
+      // 考试模式：只暂存答案，不显示对错
+      if (!state.examAnswers[qId]) state.examAnswers[qId] = [];
+      if (qType === 'X') {
+        const idx = state.examAnswers[qId].indexOf(letter);
+        if (idx > -1) state.examAnswers[qId].splice(idx, 1);
+        else state.examAnswers[qId].push(letter);
+      } else {
+        state.examAnswers[qId] = [letter];
+      }
+      refreshCardUI(qId);
       return;
     }
 
-    let html = `
-      <button class="page-btn" ${state.page <= 1 ? 'disabled' : ''} onclick="window.APP.changePage(${state.page - 1})">上一页</button>
-    `;
-
-    const maxButtons = 7;
-    let startPage = Math.max(1, state.page - 3);
-    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
-    if (endPage - startPage < maxButtons - 1) {
-      startPage = Math.max(1, endPage - maxButtons + 1);
-    }
-
-    if (startPage > 1) {
-      html += `<button class="page-btn" onclick="window.APP.changePage(1)">1</button>`;
-      if (startPage > 2) html += `<span style="padding:0 0.2rem; color:var(--text-muted);">...</span>`;
-    }
-
-    for (let p = startPage; p <= endPage; p++) {
-      html += `
-        <button class="page-btn ${p === state.page ? 'active' : ''}" onclick="window.APP.changePage(${p})">${p}</button>
-      `;
-    }
-
-    if (endPage < totalPages) {
-      if (endPage < totalPages - 1) html += `<span style="padding:0 0.2rem; color:var(--text-muted);">...</span>`;
-      html += `<button class="page-btn" onclick="window.APP.changePage(${totalPages})">${totalPages}</button>`;
-    }
-
-    html += `
-      <button class="page-btn" ${state.page >= totalPages ? 'disabled' : ''} onclick="window.APP.changePage(${state.page + 1})">下一页</button>
-    `;
-
-    container.innerHTML = html;
-  }
-
-  function handleSelectOption(qId, letter) {
-    const q = QuestionsData.find(item => item.id === qId);
-    if (!q || store.answered[qId]) return;
-
-    if (q.type === 'A') {
-      const isCorrect = (letter.toUpperCase() === q.answer.toUpperCase());
-      store.answered[qId] = {
-        userAnswer: letter,
-        isCorrect: isCorrect,
-        timestamp: Date.now()
-      };
-
-      if (!isCorrect) {
-        if (!store.wrong.includes(qId)) store.wrong.push(qId);
-      } else {
-        const idx = store.wrong.indexOf(qId);
-        if (idx > -1) store.wrong.splice(idx, 1);
-      }
-
-      saveStore();
-      refreshCardUI(qId);
-    } else {
+    if (qType === 'X') {
       if (!state.xSelections[qId]) state.xSelections[qId] = new Set();
-      const set = state.xSelections[qId];
-      if (set.has(letter)) {
-        set.delete(letter);
+      if (state.xSelections[qId].has(letter)) {
+        state.xSelections[qId].delete(letter);
       } else {
-        set.add(letter);
+        state.xSelections[qId].add(letter);
       }
       refreshCardUI(qId);
+      return;
+    }
+
+    // 单选题判定
+    if (store.answered[qId]) return; // 已判题不重复判
+
+    const isCorrect = (letter.toUpperCase() === (q.answer || '').trim().toUpperCase());
+    store.answered[qId] = {
+      userAnswer: letter,
+      isCorrect: isCorrect,
+      timestamp: Date.now()
+    };
+
+    if (!isCorrect) {
+      if (!store.wrong.includes(qId)) store.wrong.push(qId);
+    } else {
+      store.wrong = store.wrong.filter(id => id !== qId);
+    }
+
+    saveStore();
+    refreshCardUI(qId);
+
+    // 快刷模式自动在 350ms 后切下一题
+    if (state.quizMode === 'speed' && state.quizViewMode === 'card') {
+      setTimeout(() => {
+        window.APP.navigateQuestionIndex(1);
+      }, 350);
     }
   }
 
   function handleSubmitX(qId) {
-    const q = QuestionsData.find(item => item.id === qId);
-    if (!q || store.answered[qId]) return;
+    const list = getQuestionsData();
+    const q = list.find(item => item.id === qId);
+    if (!q) return;
 
-    const set = state.xSelections[qId] || new Set();
-    if (set.size === 0) {
-      alert('请至少勾选一个选项后再提交！');
+    const selectedSet = state.xSelections[qId] || new Set();
+    if (selectedSet.size === 0) {
+      alert('请至少选择一个选项后再提交！');
       return;
     }
 
-    const userAns = Array.from(set).sort().join('');
-    const correctAns = q.answer.split('').sort().join('');
+    const userAns = Array.from(selectedSet).sort().join('');
+    const correctAns = (q.answer || '').trim().toUpperCase().split('').sort().join('');
     const isCorrect = (userAns === correctAns);
 
     store.answered[qId] = {
@@ -853,8 +1319,7 @@
     if (!isCorrect) {
       if (!store.wrong.includes(qId)) store.wrong.push(qId);
     } else {
-      const idx = store.wrong.indexOf(qId);
-      if (idx > -1) store.wrong.splice(idx, 1);
+      store.wrong = store.wrong.filter(id => id !== qId);
     }
 
     delete state.xSelections[qId];
@@ -862,360 +1327,631 @@
     refreshCardUI(qId);
   }
 
-  function handleShowAnswerEarly(qId) {
-    const q = QuestionsData.find(item => item.id === qId);
-    if (!q) return;
+  function handleSubmitExam() {
+    const list = getFilteredQuestions();
+    let score = 0;
+    list.forEach(q => {
+      const picked = (state.examAnswers[q.id] || []).sort().join('');
+      const correctAns = (q.answer || '').trim().toUpperCase().split('').sort().join('');
+      const isCorrect = (picked === correctAns);
+      if (picked) {
+        store.answered[q.id] = { userAnswer: picked, isCorrect, timestamp: Date.now() };
+        if (isCorrect) score++;
+        else if (!store.wrong.includes(q.id)) store.wrong.push(q.id);
+      }
+    });
 
-    store.answered[qId] = {
-      userAnswer: '(主动查阅)',
-      isCorrect: false,
-      timestamp: Date.now()
-    };
-    if (!store.wrong.includes(qId)) store.wrong.push(qId);
+    state.examSubmitted = true;
     saveStore();
-    refreshCardUI(qId);
+    alert(`交卷成功！本次测试共答对 ${score} / ${list.length} 题，得分率 ${(score/list.length*100).toFixed(1)}%。答案与解析已全部展开！`);
+    renderQuizView();
   }
 
   function refreshCardUI(qId) {
-    const cardEl = document.getElementById(`card-${qId}`);
-    if (!cardEl) return;
-    const q = QuestionsData.find(item => item.id === qId);
-    if (!q) return;
+    if (state.quizViewMode === 'card') {
+      const list = getFilteredQuestions();
+      renderSingleQuestionCard(list);
+    } else if (state.quizViewMode === 'sheet') {
+      renderQuizView();
+    } else {
+      const card = document.getElementById(`qcard-${qId}`);
+      if (!card) return;
+      const list = getQuestionsData();
+      const q = list.find(item => item.id === qId);
+      if (!q) return;
+      const ansInfo = store.answered[qId];
+      const isAnswered = !!ansInfo || (state.quizMode === 'recite');
 
-    const ansRecord = store.answered[qId];
-    const grid = cardEl.querySelector('.options-grid');
-    if (grid) grid.innerHTML = renderOptionsHtml(q, ansRecord);
+      const optsEl = card.querySelector('.q-options');
+      if (optsEl) optsEl.innerHTML = renderOptionsHtml(q, isAnswered, ansInfo, state.quizMode === 'recite');
 
-    const xBar = cardEl.querySelector('.x-submit-bar');
-    if (xBar) xBar.remove();
-
-    let expEl = cardEl.querySelector('.q-explanation');
-    if (!expEl && ansRecord) {
-      cardEl.insertAdjacentHTML('beforeend', renderExplanationHtml(q, ansRecord));
+      const expEl = card.querySelector('.q-explanation');
+      if (expEl) {
+        expEl.innerHTML = renderExplanationHtml(q);
+        if (isAnswered) expEl.classList.add('show');
+      }
     }
   }
 
   function handleToggleStar(qId) {
-    const idx = store.starred.indexOf(qId);
-    if (idx > -1) {
-      store.starred.splice(idx, 1);
+    if (store.starred.includes(qId)) {
+      store.starred = store.starred.filter(id => id !== qId);
     } else {
       store.starred.push(qId);
     }
     saveStore();
-
-    const card = document.getElementById(`card-${qId}`);
-    if (card) {
-      const btn = card.querySelector('.star-btn');
-      if (btn) {
-        btn.classList.toggle('active', store.starred.includes(qId));
-      }
-    }
-
-    if (state.activeView === 'favorites') {
-      renderFavoritesList();
-    }
+    refreshCardUI(qId);
   }
 
-  function handleRemoveError(qId) {
-    const idx = store.wrong.indexOf(qId);
-    if (idx > -1) {
-      store.wrong.splice(idx, 1);
-      saveStore();
-      renderErrorsList();
+  function handleToggleSlash(qId) {
+    if (store.slashed.includes(qId)) {
+      store.slashed = store.slashed.filter(id => id !== qId);
+    } else {
+      store.slashed.push(qId);
     }
+    saveStore();
+    refreshCardUI(qId);
   }
 
-  // ================= Clinical Cases Engine =================
-  function getFilteredCases() {
-    return CasesData.filter(c => {
-      if (!isChapterMatch(c.chapter, state.chapter)) return false;
-      if (state.caseFilter === '10th' && !c.is10thEdition) return false;
-      if (state.caseFilter === 'starred' && !store.starredCases.includes(c.id)) return false;
-      if (state.searchQuery) {
-        const text = (c.title + c.scenario + (c.diagnosis || '') + c.questions.join(' ') + c.answers.join(' ') + (c.clinicalPearl || '')).toLowerCase();
-        if (!text.includes(state.searchQuery)) return false;
-      }
-      return true;
+  // ================= 4. 自主编辑导图考点与配图模态框 (Mindmap Custom Editor) =================
+  // 离线轻量图片压缩，防止 LocalStorage 超过浏览器配额
+  function compressImage(file, maxDimension = 1200, quality = 0.82) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(e.target.result);
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
     });
   }
 
-  function handleSetCaseFilter(filterType) {
-    state.caseFilter = filterType;
-    renderCasesList();
+  function setupMindmapEditModal() {
+    if (dom.btnApplyMmImgUrl && dom.mmImgUrlInput) {
+      dom.btnApplyMmImgUrl.addEventListener('click', () => {
+        const url = dom.mmImgUrlInput.value.trim();
+        if (url) {
+          tempMmImg = url;
+          showMmImgPreview(url);
+        }
+      });
+    }
+
+    if (dom.mmImgFileInput) {
+      dom.mmImgFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        tempMmImg = await compressImage(file);
+        showMmImgPreview(tempMmImg);
+      });
+    }
+
+    if (dom.btnRemoveMmImg) {
+      dom.btnRemoveMmImg.addEventListener('click', () => {
+        tempMmImg = "";
+        hideMmImgPreview();
+      });
+    }
+
+    if (dom.btnSaveMmNode) {
+      dom.btnSaveMmNode.addEventListener('click', () => {
+        if (!state.editingMmKbId) return;
+        const notes = dom.mmEditCustomNotes.value.trim();
+        store.mindmapCustom[state.editingMmKbId] = {
+          notes: notes,
+          img: tempMmImg,
+          time: Date.now()
+        };
+        saveStore();
+        closeMmNodeModal();
+        renderMindMap();
+        inspectMindMapNode(dom.mmEditNodeName.value, '', '', state.editingMmKbId);
+      });
+    }
+
+    if (dom.btnResetMmNode) {
+      dom.btnResetMmNode.addEventListener('click', () => {
+        if (!state.editingMmKbId) return;
+        delete store.mindmapCustom[state.editingMmKbId];
+        saveStore();
+        closeMmNodeModal();
+        renderMindMap();
+        inspectMindMapNode(dom.mmEditNodeName.value, '', '', state.editingMmKbId);
+      });
+    }
   }
 
-  function renderCasesList() {
-    const btnAll = document.getElementById('caseFilterAll');
-    const btn10th = document.getElementById('caseFilter10th');
-    const btnStarred = document.getElementById('caseFilterStarred');
-    if (btnAll) btnAll.classList.toggle('active', state.caseFilter === 'all');
-    if (btn10th) btn10th.classList.toggle('active', state.caseFilter === '10th');
-    if (btnStarred) btnStarred.classList.toggle('active', state.caseFilter === 'starred');
+  function openMmNodeEditModal(kbId, nodeName) {
+    state.editingMmKbId = kbId;
+    const custom = store.mindmapCustom[kbId] || {};
+    tempMmImg = custom.img || "";
 
-    const cases = getFilteredCases();
-    dom.casesStatsBadge.innerHTML = `当前显示 <b>${cases.length}</b> 个病例`;
+    if (dom.mmEditNodeName) dom.mmEditNodeName.value = nodeName || kbId;
+    if (dom.mmEditCustomNotes) dom.mmEditCustomNotes.value = custom.notes || "";
+    if (dom.mmImgUrlInput) dom.mmImgUrlInput.value = (tempMmImg.startsWith('http') ? tempMmImg : '');
 
-    if (cases.length === 0) {
-      dom.casesList.innerHTML = `
-        <div class="empty-box">
-          <div class="empty-icon-wrap">${SVG.info}</div>
-          <h3>未找到匹配的临床病例</h3>
-          <p>请尝试切换题库类型、清除搜索关键词或切换至其他章节查看。</p>
-        </div>
-      `;
+    if (tempMmImg) showMmImgPreview(tempMmImg);
+    else hideMmImgPreview();
+
+    if (dom.mindmapNodeModal) dom.mindmapNodeModal.classList.add('active');
+  }
+
+  function closeMmNodeModal() {
+    state.editingMmKbId = null;
+    tempMmImg = "";
+    if (dom.mindmapNodeModal) dom.mindmapNodeModal.classList.remove('active');
+  }
+
+  function showMmImgPreview(src) {
+    if (dom.mmImgPreviewThumb) dom.mmImgPreviewThumb.src = src;
+    if (dom.mmImgPreviewBox) dom.mmImgPreviewBox.style.display = 'block';
+  }
+
+  function hideMmImgPreview() {
+    if (dom.mmImgPreviewThumb) dom.mmImgPreviewThumb.src = "";
+    if (dom.mmImgPreviewBox) dom.mmImgPreviewBox.style.display = 'none';
+  }
+
+  // ================= 5. 自主编辑题目笔记与自拟解析模态框 (Question Note Editor) =================
+  function setupQuestionNoteModal() {
+    if (dom.qImgFileInput) {
+      dom.qImgFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        tempQImg = await compressImage(file);
+        showQImgPreview(tempQImg);
+      });
+    }
+
+    if (dom.btnRemoveQImg) {
+      dom.btnRemoveQImg.addEventListener('click', () => {
+        tempQImg = "";
+        hideQImgPreview();
+      });
+    }
+
+    if (dom.btnSaveQNote) {
+      dom.btnSaveQNote.addEventListener('click', () => {
+        if (!state.editingQId) return;
+        const note = dom.qNoteContentInput.value.trim();
+        const customAns = dom.qNoteCustomAns.value.trim();
+        store.questionNotes[state.editingQId] = {
+          note,
+          customAns,
+          img: tempQImg,
+          time: Date.now()
+        };
+        saveStore();
+        closeQNoteModal();
+        refreshCardUI(state.editingQId);
+      });
+    }
+
+    if (dom.btnDeleteQNote) {
+      dom.btnDeleteQNote.addEventListener('click', () => {
+        if (!state.editingQId) return;
+        delete store.questionNotes[state.editingQId];
+        saveStore();
+        closeQNoteModal();
+        refreshCardUI(state.editingQId);
+      });
+    }
+  }
+
+  function openQNoteModal(qId) {
+    state.editingQId = qId;
+    const q = getQuestionsData().find(item => item.id === qId);
+    if (!q) return;
+
+    const userNote = store.questionNotes[qId] || {};
+    tempQImg = userNote.img || "";
+
+    if (dom.modalQNoteStem) {
+      dom.modalQNoteStem.innerHTML = `<strong>#${q.num || ''}</strong> ${escapeHtml(q.stem || '')}`;
+    }
+    if (dom.qNoteContentInput) dom.qNoteContentInput.value = userNote.note || "";
+    if (dom.qNoteCustomAns) dom.qNoteCustomAns.value = userNote.customAns || "";
+
+    if (tempQImg) showQImgPreview(tempQImg);
+    else hideQImgPreview();
+
+    if (dom.questionNoteModal) dom.questionNoteModal.classList.add('active');
+  }
+
+  function closeQNoteModal() {
+    state.editingQId = null;
+    tempQImg = "";
+    if (dom.questionNoteModal) dom.questionNoteModal.classList.remove('active');
+  }
+
+  function showQImgPreview(src) {
+    if (dom.qImgPreviewThumb) dom.qImgPreviewThumb.src = src;
+    if (dom.qImgPreviewBox) dom.qImgPreviewBox.style.display = 'block';
+  }
+
+  function hideQImgPreview() {
+    if (dom.qImgPreviewThumb) dom.qImgPreviewThumb.src = "";
+    if (dom.qImgPreviewBox) dom.qImgPreviewBox.style.display = 'none';
+  }
+
+  // ================= 6. 错题本与重点收藏夹 =================
+  function renderErrorsList() {
+    const list = getQuestionsData().filter(q => store.wrong.includes(q.id));
+    const container = document.getElementById('errorsQuestionsList');
+    if (container) renderQuestionCards(container, list, false);
+  }
+
+  function renderFavoritesList() {
+    const list = getQuestionsData().filter(q => store.starred.includes(q.id));
+    const container = document.getElementById('favoritesQuestionsList');
+    if (container) renderQuestionCards(container, list, false);
+  }
+
+  function renderQuestionCards(container, list, isPaged) {
+    if (!container) return;
+    if (!list || list.length === 0) {
+      container.innerHTML = `<div class="empty-state">当前分类下暂无试题</div>`;
+      if (dom.quizPaginationBar) dom.quizPaginationBar.innerHTML = '';
       return;
     }
 
-    let html = '';
-    cases.forEach((item) => {
-      const isMastered = store.masteredCases.includes(item.id);
-      const isStarred = store.starredCases.includes(item.id);
+    let items = list;
+    if (isPaged) {
+      const totalPages = Math.ceil(list.length / state.pageSize);
+      if (state.page > totalPages) state.page = totalPages;
+      const start = (state.page - 1) * state.pageSize;
+      items = list.slice(start, start + state.pageSize);
+      renderPagination(list.length);
+    }
 
-      html += `
-        <div class="case-card" id="case-${item.id}">
+    container.innerHTML = items.map(q => renderSingleCardHtml(q)).join('');
+  }
+
+  function renderPagination(totalCount) {
+    if (!dom.quizPaginationBar) return;
+    const totalPages = Math.ceil(totalCount / state.pageSize);
+    if (totalPages <= 1) {
+      dom.quizPaginationBar.innerHTML = '';
+      return;
+    }
+
+    let html = `
+      <button class="page-btn" ${state.page <= 1 ? 'disabled' : ''} onclick="window.APP.changePage(${state.page - 1})">上一页</button>
+      <span style="font-size:0.85rem; font-weight:700; color:var(--text-muted); align-self:center;">
+        第 ${state.page} / ${totalPages} 页
+      </span>
+      <button class="page-btn" ${state.page >= totalPages ? 'disabled' : ''} onclick="window.APP.changePage(${state.page + 1})">下一页</button>
+    `;
+    dom.quizPaginationBar.innerHTML = html;
+  }
+
+  // ================= 7. 临床病例研析 (Clinical Cases) =================
+  function renderCasesList() {
+    if (!dom.casesList) return;
+    let list = getCasesData();
+
+    if (state.chapter !== '全部') {
+      list = list.filter(c => isChapterMatch(c.chapter, state.chapter));
+    }
+    if (state.caseFilter === '10th') {
+      list = list.filter(c => c.is10thEdition);
+    } else if (state.caseFilter === 'starred') {
+      list = list.filter(c => store.starredCases.includes(c.id));
+    }
+
+    if (state.searchQuery) {
+      const q = state.searchQuery;
+      list = list.filter(c => 
+        (c.title && c.title.toLowerCase().includes(q)) ||
+        (c.summary && c.summary.toLowerCase().includes(q)) ||
+        (c.question && c.question.toLowerCase().includes(q))
+      );
+    }
+
+    if (dom.casesStatsBadge) dom.casesStatsBadge.textContent = `共 ${list.length} 个病例`;
+
+    if (!list || list.length === 0) {
+      dom.casesList.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">未检索到相关临床病例</div>`;
+      return;
+    }
+
+    dom.casesList.innerHTML = list.map((c, i) => {
+      const isStarred = store.starredCases.includes(c.id);
+      return `
+        <div class="case-card" id="case-${c.id}">
           <div class="case-header">
-            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-              <span class="q-badge badge-chapter">${item.chapter}</span>
-              <span class="q-badge badge-a">${item.caseNum}</span>
-              ${item.is10thEdition ? `
-                <span class="q-badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #7dd3fc; font-weight:700;">
-                  人卫第十版教材考题
-                </span>
-              ` : `
-                <span class="q-badge" style="background:var(--bg-subtle); color:var(--text-muted); border:1px solid var(--border);">
-                  中山医讲义重点案例
-                </span>
-              `}
+            <div>
+              <div class="case-number">${escapeHtml(c.chapter)} · 病例 #${i + 1}</div>
+              <h3 class="case-title">${escapeHtml(c.title)}</h3>
             </div>
-            <div class="q-actions">
-              <button class="btn-nav" style="font-size:0.75rem; padding:0.25rem 0.6rem; ${isMastered ? 'color:var(--success); border-color:var(--success);' : ''}" onclick="window.APP.toggleCaseMastered('${item.id}')">
-                ${isMastered ? '已掌握' : '标记已掌握'}
-              </button>
-              <button class="star-btn ${isStarred ? 'active' : ''}" onclick="window.APP.toggleCaseStar('${item.id}')" title="收藏病例">
-                ${SVG.star}
-              </button>
+            <button class="star-btn ${isStarred ? 'active' : ''}" onclick="window.APP.toggleStarCase('${c.id}')" title="收藏病例">
+              ${SVG.star}
+            </button>
+          </div>
+          <div class="case-body">
+            <div style="font-weight:700; color:var(--primary); font-size:0.85rem; margin-bottom:0.35rem;">【病史与临床体征】：</div>
+            <div class="case-summary">${escapeHtml(c.summary)}</div>
+            <div class="case-question">
+              <strong>【解剖学思考题】：</strong><br>${escapeHtml(c.question)}
             </div>
-          </div>
-
-          <h3 class="case-title" style="margin-bottom:1rem;">${item.title}</h3>
-
-          <div class="case-scenario-box">
-            <b>【临床病例情境】：</b>${item.scenario}
-          </div>
-
-          <div class="case-q-box">
-            <div class="case-q-title">临床解剖学问题：</div>
-            <ul class="case-q-list">
-              ${item.questions.map(q => `<li class="case-q-item">${q}</li>`).join('')}
-            </ul>
-          </div>
-
-          <button class="case-reveal-btn" onclick="window.APP.toggleCaseAnswers('${item.id}')">
-            <span>思考完毕 · 展开解剖学答案与临床机制解析</span>
-          </button>
-
-          <div class="case-answers-drawer" id="case-ans-${item.id}">
-            ${item.diagnosis ? `
-              <div style="background:var(--bg-main); border-left:4px solid var(--success); padding:0.65rem 0.95rem; margin-bottom:0.85rem; border-radius:var(--radius-sm); font-weight:700; color:var(--success); font-size:0.95rem;">
-                【临床权威诊断】：${item.diagnosis}
-              </div>
-            ` : ''}
-            <div style="font-weight:700; color:var(--primary); margin-bottom:0.75rem; font-size:1.02rem;">
-              【逐问解剖机制权威精析】：
+            <button class="btn-toggle-answer" onclick="window.APP.toggleCaseAnswer('${c.id}')">
+              展开权威解剖学答案与机制解析
+            </button>
+            <div class="case-answer-box" id="case-ans-${c.id}">
+              ${escapeHtml(c.answer)}
             </div>
-            ${item.answers.map(ans => `<div class="ans-item">${ans}</div>`).join('')}
-            ${item.clinicalPearl ? `
-              <div class="ans-pearl-box">
-                临床要点提炼 (Clinical Pearl)：${item.clinicalPearl}
-              </div>
-            ` : ''}
           </div>
         </div>
       `;
-    });
-
-    dom.casesList.innerHTML = html;
+    }).join('');
   }
 
-  function handleToggleCaseAnswers(caseId) {
-    const drawer = document.getElementById(`case-ans-${caseId}`);
-    if (drawer) {
-      drawer.classList.toggle('open');
-    }
+  function handleToggleCaseAnswer(cId) {
+    const box = document.getElementById(`case-ans-${cId}`);
+    if (box) box.classList.toggle('show');
   }
 
-  function handleToggleCaseMastered(caseId) {
-    const idx = store.masteredCases.indexOf(caseId);
-    if (idx > -1) {
-      store.masteredCases.splice(idx, 1);
+  function handleToggleStarCase(cId) {
+    if (store.starredCases.includes(cId)) {
+      store.starredCases = store.starredCases.filter(id => id !== cId);
     } else {
-      store.masteredCases.push(caseId);
+      store.starredCases.push(cId);
     }
     saveStore();
     renderCasesList();
   }
 
-  function handleToggleCaseStar(caseId) {
-    const idx = store.starredCases.indexOf(caseId);
-    if (idx > -1) {
-      store.starredCases.splice(idx, 1);
-    } else {
-      store.starredCases.push(caseId);
-    }
-    saveStore();
-    renderCasesList();
-  }
-
-  // ================= Knowledge Modal Linkage =================
+  // ================= 8. 考点知识解析弹窗 =================
   function openKnowledgeModal(kbId) {
-    const card = KnowledgeData.find(k => k.id === kbId);
+    const card = getKnowledgeData().find(k => k.id === kbId);
     if (!card) return;
 
-    dom.modalTitle.textContent = `${card.chapter} · ${card.title}`;
-    dom.modalBody.innerHTML = `
-      <div style="font-weight:700; color:var(--primary); margin-bottom:0.75rem; font-size:1.02rem;">
-        【考点引导】：
-      </div>
-      <div style="background:var(--bg-subtle); padding:1rem; border-radius:var(--radius-sm); margin-bottom:1.25rem; font-weight:600;">
-        ${card.front}
-      </div>
-
-      <div style="font-weight:700; color:var(--teal); margin-bottom:0.75rem; font-size:1.02rem;">
-        【解剖学精析与结构毗邻】：
-      </div>
-      <div style="line-height:1.8; color:var(--text-main); margin-bottom:1.25rem;">
-        ${card.back}
-      </div>
-
-      ${card.clinicalNote ? `
-        <div class="card-clinical-box" style="margin-top:0;">
-          <b>临床应用要点：</b>${card.clinicalNote}
-        </div>
-      ` : ''}
-    `;
-
-    dom.modalGoAnkiBtn.onclick = () => {
-      closeModal();
-      dom.navTabs.forEach(t => {
-        if (t.getAttribute('data-view') === 'anki') t.click();
-      });
-      const idx = KnowledgeData.findIndex(k => k.id === kbId);
-      if (idx > -1) {
-        state.chapter = '全部';
-        document.querySelectorAll('.ch-pill').forEach(p => p.classList.toggle('active', p.getAttribute('data-ch') === '全部'));
-        state.ankiIndex = idx;
-        renderAnkiCard();
-      }
-    };
-
-    dom.modalOverlay.classList.add('active');
-  }
-
-  function closeModal() {
-    dom.modalOverlay.classList.remove('active');
-  }
-
-  // ================= Dashboard & Stats =================
-  function updateBadgesAndStats() {
-    const errorCount = store.wrong.length;
-    const favCount = store.starred.length;
-
-    if (dom.badgeErrors) {
-      dom.badgeErrors.textContent = errorCount;
-      dom.badgeErrors.style.display = errorCount > 0 ? 'inline-block' : 'none';
+    if (dom.modalTitle) dom.modalTitle.textContent = `${card.chapter} · ${card.title}`;
+    
+    const custom = store.mindmapCustom[kbId] || {};
+    let customHtml = '';
+    if (custom.notes) {
+      customHtml += `<div class="mm-leaf-custom-notes" style="margin-top:1rem;"><strong>【我的个性化笔记】：</strong><br>${escapeHtml(custom.notes)}</div>`;
+    }
+    if (custom.img) {
+      customHtml += `<img class="mm-leaf-img" src="${custom.img}" alt="解剖配图" style="max-height:280px;margin-top:0.75rem;" onclick="window.open('${custom.img}')">`;
     }
 
+    if (dom.modalBody) {
+      dom.modalBody.innerHTML = `
+        <div style="font-weight:700; color:var(--primary); margin-bottom:0.75rem; font-size:1.02rem;">
+          【考点引导】：
+        </div>
+        <div style="background:var(--bg-subtle); padding:1rem; border-radius:var(--radius-sm); margin-bottom:1.25rem; font-weight:600;">
+          ${escapeHtml(card.front)}
+        </div>
+        <div style="font-weight:700; color:var(--text-main); margin-bottom:0.75rem; font-size:1.02rem;">
+          【核心解剖毗邻与考点精析】：
+        </div>
+        <div style="line-height:1.7; font-size:0.95rem; white-space:pre-wrap; margin-bottom:1rem;">
+          ${escapeHtml(card.back)}
+        </div>
+        ${card.mnemonic ? `
+          <div style="background:rgba(16,185,129,0.08); border-left:3px solid var(--success); padding:0.75rem 1rem; border-radius:var(--radius-sm); color:#059669; font-weight:600;">
+            <strong>【记忆口诀】</strong>：${escapeHtml(card.mnemonic)}
+          </div>
+        ` : ''}
+        ${customHtml}
+      `;
+    }
+
+    if (dom.modalGoAnkiBtn) {
+      dom.modalGoAnkiBtn.onclick = () => {
+        closeKnowledgeModal();
+        window.APP.goToAnkiCard(kbId);
+      };
+    }
+
+    if (dom.modalOverlay) dom.modalOverlay.classList.add('active');
+  }
+
+  function closeKnowledgeModal() {
+    if (dom.modalOverlay) dom.modalOverlay.classList.remove('active');
+  }
+
+  // ================= 9. 数据中心与统计看板 =================
+  function updateBadgesAndStats() {
+    if (dom.badgeErrors) {
+      const errCount = store.wrong.length;
+      dom.badgeErrors.textContent = errCount;
+      dom.badgeErrors.style.display = errCount > 0 ? 'inline-block' : 'none';
+    }
     if (dom.badgeStarred) {
-      dom.badgeStarred.textContent = favCount;
-      dom.badgeStarred.style.display = favCount > 0 ? 'inline-block' : 'none';
+      const starCount = store.starred.length;
+      dom.badgeStarred.textContent = starCount;
+      dom.badgeStarred.style.display = starCount > 0 ? 'inline-block' : 'none';
     }
   }
 
   function renderStatsDashboard() {
-    const answeredKeys = Object.keys(store.answered);
-    const totalAnswered = answeredKeys.length;
-    const totalCorrect = answeredKeys.filter(k => store.answered[k].isCorrect).length;
-    const accuracy = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
+    const questions = getQuestionsData();
+    const knowledge = getKnowledgeData();
+    const answeredCount = Object.keys(store.answered).length;
+    const correctCount = Object.values(store.answered).filter(a => a.isCorrect).length;
+    const wrongCount = store.wrong.length;
+    const starredCount = store.starred.length;
+    const slashedCount = store.slashed.length;
+    const rate = answeredCount > 0 ? ((correctCount / answeredCount) * 100).toFixed(1) : '0.0';
 
-    const masteredCardsCount = Object.keys(store.masteredCards).filter(k => store.masteredCards[k].status === 'easy').length;
-
-    dom.statDoneCount.textContent = totalAnswered;
-    dom.statAccuracy.textContent = `${accuracy}%`;
-    dom.statMasteredCards.textContent = `${masteredCardsCount} / ${KnowledgeData.length}`;
-    dom.statErrorCount.textContent = store.wrong.length;
-    dom.statFavCount.textContent = store.starred.length;
+    const statDoneCount = document.getElementById('statDoneCount');
+    if (statDoneCount) statDoneCount.textContent = answeredCount;
+    const statAccuracy = document.getElementById('statAccuracy');
+    if (statAccuracy) statAccuracy.textContent = rate + '%';
+    const statErrorCount = document.getElementById('statErrorCount');
+    if (statErrorCount) statErrorCount.textContent = wrongCount;
+    const statFavCount = document.getElementById('statFavCount');
+    if (statFavCount) statFavCount.textContent = starredCount;
+    const statMasteredCards = document.getElementById('statMasteredCards');
+    if (statMasteredCards) statMasteredCards.textContent = `${slashedCount} 题已斩 / ${knowledge.length} 考点`;
   }
 
-  // ================= Export & Import =================
-  function exportUserData() {
-    const blob = new Blob([JSON.stringify(store, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `局部解剖学学习档案备份_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // ================= Helpers =================
+  function isChapterMatch(itemChapter, selectedChapter) {
+    if (!itemChapter || selectedChapter === '全部') return true;
+    if (itemChapter === selectedChapter) return true;
+    if (selectedChapter.includes(itemChapter) || itemChapter.includes(selectedChapter)) return true;
+    if ((selectedChapter.includes('脊柱') || selectedChapter.includes('背部')) && (itemChapter.includes('背') || itemChapter.includes('脊柱'))) return true;
+    return false;
   }
 
-  function importUserData(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+  function handleKeyboardShortcuts(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const imported = JSON.parse(event.target.result);
-        store = Object.assign({}, defaultStore, imported);
-        saveStore();
-        alert('学习记录备份导入成功！');
-        location.reload();
-      } catch (err) {
-        alert('文件格式错误，无法导入！');
+    if (state.activeView === 'anki') {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        toggleAnkiFlip();
+      } else if (e.code === 'ArrowLeft') {
+        navigateAnkiCard(-1);
+      } else if (e.code === 'ArrowRight') {
+        navigateAnkiCard(1);
+      } else if (e.key === '1') {
+        rateAnkiCard('again');
+      } else if (e.key === '2') {
+        rateAnkiCard('good');
+      } else if (e.key === '3') {
+        rateAnkiCard('easy');
       }
-    };
-    reader.readAsText(file);
+    } else if (state.activeView === 'quiz' && state.quizViewMode === 'card') {
+      if (e.code === 'ArrowLeft') {
+        window.APP.navigateQuestionIndex(-1);
+      } else if (e.code === 'ArrowRight') {
+        window.APP.navigateQuestionIndex(1);
+      }
+    }
   }
 
   function escapeHtml(str) {
-    return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    if (!str) return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
-  // ================= Global Public API for Inline Handlers =================
+  // ================= Global Window API =================
   window.APP = {
+    // Nav & Course
+    switchCourse: switchActiveCourse,
+    
+    // Quiz Actions (医考帮架构)
+    jumpToQuestionIndex: (idx) => {
+      state.activeQuestionIndex = idx;
+      state.quizViewMode = 'card';
+      updateQuizViewButtons();
+      renderQuizView();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    switchToSheetView: () => {
+      state.quizViewMode = 'sheet';
+      updateQuizViewButtons();
+      renderQuizView();
+    },
+    navigateQuestionIndex: (step) => {
+      const list = getFilteredQuestions();
+      state.activeQuestionIndex += step;
+      if (state.activeQuestionIndex < 0) state.activeQuestionIndex = 0;
+      if (state.activeQuestionIndex >= list.length) state.activeQuestionIndex = list.length - 1;
+      renderSingleQuestionCard(list);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
     selectOption: handleSelectOption,
-    submitXQuestion: handleSubmitX,
-    showAnswerEarly: handleShowAnswerEarly,
+    submitX: handleSubmitX,
     toggleStar: handleToggleStar,
-    removeError: handleRemoveError,
+    toggleSlash: handleToggleSlash,
     changePage: (p) => {
       state.page = p;
-      renderQuizList();
-      window.scrollTo({ top: 120, behavior: 'smooth' });
+      renderQuizView();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     },
-    toggleCaseAnswers: handleToggleCaseAnswers,
-    toggleCaseMastered: handleToggleCaseMastered,
-    toggleCaseStar: handleToggleCaseStar,
-    setCaseFilter: handleSetCaseFilter,
-    openKnowledgeModal: openKnowledgeModal,
-    
-    // Mind Map
-    toggleMmNode: toggleMindMapNode,
+
+    // Question Note Modal
+    openQNoteModal: openQNoteModal,
+    closeQNoteModal: closeQNoteModal,
+
+    // Mind Map Actions
     selectMmNode: (nodeId, name, desc, chapter, kbId) => {
       document.querySelectorAll('.mm-node').forEach(n => n.classList.remove('active'));
       const target = document.getElementById(nodeId);
       if (target) target.classList.add('active');
       inspectMindMapNode(name, desc, chapter, kbId);
+      if (kbId) {
+        state.expandedKnowledgeNodes[kbId] = !state.expandedKnowledgeNodes[kbId];
+        renderMindMap();
+        const reTarget = document.getElementById(nodeId);
+        if (reTarget) reTarget.classList.add('active');
+      }
+    },
+    toggleMmNode: toggleMindMapNode,
+    toggleLeafKnowledge: toggleLeafKnowledge,
+    openMmNodeEditModal: openMmNodeEditModal,
+    closeMmNodeModal: closeMmNodeModal,
+
+    // Case Actions
+    toggleCaseAnswer: handleToggleCaseAnswer,
+    toggleStarCase: handleToggleStarCase,
+    setCaseFilter: (f) => {
+      state.caseFilter = f;
+      document.querySelectorAll('#caseFilterAll, #caseFilter10th, #caseFilterStarred').forEach(btn => btn.classList.remove('active'));
+      if (f === 'all') document.getElementById('caseFilterAll').classList.add('active');
+      if (f === '10th') document.getElementById('caseFilter10th').classList.add('active');
+      if (f === 'starred') document.getElementById('caseFilterStarred').classList.add('active');
+      renderCasesList();
+    },
+
+    // Cross-link Navigation
+    openKnowledgeModal: openKnowledgeModal,
+    goToAnkiCard: (kbId) => {
+      const list = getKnowledgeData();
+      const idx = list.findIndex(k => k.id === kbId);
+      if (idx > -1) {
+        state.chapter = '全部';
+        renderChapterPills();
+        state.ankiIndex = idx;
+        renderView('anki');
+      }
     },
     switchChapterAndQuiz: (ch) => {
       state.chapter = ch;
-      document.querySelectorAll('.ch-pill').forEach(p => p.classList.toggle('active', p.getAttribute('data-ch') === ch));
-      dom.navTabs.forEach(t => {
-        if (t.getAttribute('data-view') === 'quiz') t.click();
-      });
+      renderChapterPills();
+      state.quizViewMode = 'sheet';
+      updateQuizViewButtons();
+      renderView('quiz');
     }
   };
 
-  window.addEventListener('DOMContentLoaded', init);
+  // Launch on DOM ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 
 })();

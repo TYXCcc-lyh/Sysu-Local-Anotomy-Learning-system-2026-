@@ -21,8 +21,38 @@
       <div class="logo-area">
         <div class="logo-badge">MED</div>
         <div class="logo-text">
-          <h1>局部解剖学数字化交互学习系统 <span class="sub-tag">人卫十版 & 经典讲义精编</span></h1>
-          <span>Regional Anatomy Interactive Suite · 基础闪卡 · 思维导图 · 题库测评 · 临床病例</span>
+          <h1>数字化医学交互学习系统 <span class="sub-tag" id="headerSubTag">考点闪卡 · 导图 · 题库 · 病例</span></h1>
+          <span id="headerSubDesc">医考帮全览答题卡 · 智能斩题 · 思维导图内嵌知识 · 自主图文笔记</span>
+        </div>
+        <!-- Course Switcher -->
+        <div class="course-switcher-wrap">
+          <button class="course-select-btn" id="courseSelectBtn" title="切换当前学习学科">
+            <span id="currentCourseBadge" style="font-size:0.72rem; padding:0.15rem 0.4rem; background:var(--primary); color:#fff; border-radius:3px;">ANATOMY</span>
+            <span id="currentCourseName">局部解剖学</span>
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div class="course-dropdown-menu" id="courseDropdownMenu">
+            <div class="course-opt-item active" data-course="anatomy">
+              <div class="course-opt-title">
+                <span>局部解剖学</span>
+                <span style="font-size:0.72rem; color:var(--primary); font-weight:700;">当前学习</span>
+              </div>
+              <div class="course-opt-desc">1,281 试题 · 264 闪卡 · 143 病例 · 8大解剖区</div>
+            </div>
+            <div class="course-opt-item" data-course="biochem">
+              <div class="course-opt-title">
+                <span>生物化学与分子生物学</span>
+                <span style="font-size:0.72rem; color:#10b981; font-weight:700;">拓展学科</span>
+              </div>
+              <div class="course-opt-desc">糖脂代谢 · 氧化磷酸化 · 蛋白质与核酸大分子</div>
+            </div>
+            <div class="course-opt-item" id="btnOpenImportCourseModal" style="border-top:1px dashed var(--border); color:var(--primary);">
+              <div class="course-opt-title">
+                <span>+ 导入自定义学科课件 (JSON)</span>
+              </div>
+              <div class="course-opt-desc">支持无缝载入病理学、生理学等其他医学院校课程包</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -192,9 +222,11 @@
               <h2 style="font-size:1.15rem; font-weight:700; margin:0;">局部解剖学整体知识架构图谱</h2>
               <span style="font-size:0.82rem; color:var(--text-muted);">涵盖八大解剖分区 · 264张精要闪卡考点100%映射入网 · 支持点击展开折叠与双向考点联动</span>
             </div>
-            <div style="display:flex; gap:0.5rem;">
-              <button class="btn-nav" id="btnMmExpandAll">全部展开</button>
-              <button class="btn-nav" id="btnMmCollapseAll">全部折叠</button>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+              <button class="btn-nav" id="btnMmExpandAll">全部展开结构</button>
+              <button class="btn-nav" id="btnMmCollapseAll">全部折叠结构</button>
+              <button class="btn-nav" id="btnMmExpandAllKnowledge" style="background:var(--primary); color:#fff; border-color:var(--primary);">展开所有考点卡片</button>
+              <button class="btn-nav" id="btnMmCollapseAllKnowledge">收起所有考点卡片</button>
             </div>
           </div>
           <div id="mindmapTree"></div>
@@ -212,34 +244,112 @@
       </div>
     </section>
 
-    <!-- VIEW 3: QUIZ & TESTING -->
+    <!-- VIEW 3: QUIZ & TESTING (医考帮深度对标交互架构) -->
     <section class="view-section" id="view-quiz">
-      <!-- Quiz Toolbar Filter -->
-      <div class="quiz-header-bar">
-        <div class="filter-group">
-          <span style="font-size:0.85rem; font-weight:700; color:var(--text-muted); margin-right:0.25rem;">题型:</span>
-          <button class="filter-btn active" data-qtype="all">全部题型</button>
-          <button class="filter-btn" data-qtype="A">A型题 (单选)</button>
-          <button class="filter-btn" data-qtype="X">X型题 (多选)</button>
+      <!-- 医考帮 四行过滤栏 (斩题 / 题型 / 分类 / 模式) -->
+      <div class="yikao-filter-panel" id="yikaoFilterPanel">
+        <!-- Row 1: 斩题 -->
+        <div class="yikao-row">
+          <span class="yikao-label">斩题</span>
+          <div class="yikao-pills" id="pillsSlashFilter">
+            <button class="yikao-pill active" data-slash="all">全部</button>
+            <button class="yikao-pill" data-slash="slashed">已斩</button>
+            <button class="yikao-pill" data-slash="unslashed">未斩</button>
+          </div>
         </div>
 
-        <div class="filter-group">
-          <span style="font-size:0.85rem; font-weight:700; color:var(--text-muted); margin-right:0.25rem;">状态:</span>
-          <button class="filter-btn active" data-qstatus="all">全部</button>
-          <button class="filter-btn" data-qstatus="unanswered">未答</button>
-          <button class="filter-btn" data-qstatus="wrong">做错</button>
-          <button class="filter-btn" data-qstatus="correct">已正确</button>
-          <button class="filter-btn" data-qstatus="starred">已收藏</button>
+        <!-- Row 2: 题型 -->
+        <div class="yikao-row">
+          <span class="yikao-label">题型</span>
+          <div class="yikao-pills" id="pillsTypeFilter">
+            <button class="yikao-pill active" data-qtype="all">全部</button>
+            <button class="yikao-pill" data-qtype="A">A1型题</button>
+            <button class="yikao-pill" data-qtype="A2">A2型题</button>
+            <button class="yikao-pill" data-qtype="X">X型题</button>
+          </div>
         </div>
 
-        <div class="quiz-stats-badge" id="quizStatsBadge">加载题目中...</div>
+        <!-- Row 3: 分类 -->
+        <div class="yikao-row">
+          <span class="yikao-label">分类</span>
+          <div class="yikao-pills" id="pillsCategoryFilter">
+            <button class="yikao-pill active" data-qcat="all">全部</button>
+            <button class="yikao-pill" data-qcat="wrong">做错的</button>
+            <button class="yikao-pill" data-qcat="starred">收藏的</button>
+            <button class="yikao-pill" data-qcat="unanswered">未做的</button>
+          </div>
+        </div>
+
+        <!-- Row 4: 模式 -->
+        <div class="yikao-row">
+          <span class="yikao-label">模式</span>
+          <div class="yikao-pills" id="pillsModeFilter">
+            <button class="yikao-pill mode-pill active" data-mode="practice">练习模式</button>
+            <button class="yikao-pill mode-pill" data-mode="speed">快刷模式</button>
+            <button class="yikao-pill mode-pill" data-mode="exam">测试模式</button>
+            <button class="yikao-pill mode-pill" data-mode="recite">背题模式</button>
+          </div>
+        </div>
+
+        <!-- Row 5: 考点细分 -->
+        <div class="yikao-row" id="yikaoSubTopicRow">
+          <span class="yikao-label">细分</span>
+          <div class="yikao-pills" id="pillsSubTopicFilter">
+            <button class="yikao-pill active" data-subtopic="all">全部考点</button>
+          </div>
+        </div>
       </div>
 
-      <!-- Questions List Container -->
-      <div class="questions-list" id="quizQuestionsList"></div>
+      <!-- 题库视图切换栏 (答题卡全览 / 单题刷题 / 连续流式) -->
+      <div class="quiz-mode-toolbar">
+        <div class="quiz-view-toggle">
+          <button class="quiz-view-btn active" id="btnViewSheet" title="医考帮整体阅览九宫格">
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <span>答题卡矩阵全览</span>
+          </button>
+          <button class="quiz-view-btn" id="btnViewCard" title="单题沉浸模式">
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="15" y2="13"></line></svg>
+            <span>单题刷题模式</span>
+          </button>
+          <button class="quiz-view-btn" id="btnViewList" title="连续流式列表">
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            <span>连续流式列表</span>
+          </button>
+        </div>
 
-      <!-- Pagination Controls -->
-      <div class="pagination-bar" id="quizPaginationBar"></div>
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+          <div class="quiz-stats-badge" id="quizStatsBadge">加载题目中...</div>
+          <button class="btn-nav" id="btnSubmitExam" style="display:none; background:var(--primary); color:#fff; border-color:var(--primary);">
+            交卷评分
+          </button>
+        </div>
+      </div>
+
+      <!-- 医考帮 答题卡矩阵视图容器 -->
+      <div class="answer-sheet-container" id="quizSheetContainer">
+        <div class="sheet-header-info">
+          <div id="sheetCountSummary" style="font-weight:700; font-size:0.92rem;">
+            当前筛选共 <span id="sheetTotalCount" style="color:var(--primary);">0</span> 题，未做 <span id="sheetUnansweredCount" style="color:var(--text-muted);">0</span> 题，已斩 <span id="sheetSlashedCount" style="color:#8b5cf6;">0</span> 题
+          </div>
+          <div class="sheet-legend">
+            <div class="legend-item"><div class="legend-dot unanswered"></div> 未做</div>
+            <div class="legend-item"><div class="legend-dot correct"></div> 正确</div>
+            <div class="legend-item"><div class="legend-dot wrong"></div> 做错</div>
+            <div class="legend-item"><div class="legend-dot slashed"></div> 已斩</div>
+            <div class="legend-item"><div class="legend-dot starred"></div> 收藏</div>
+          </div>
+        </div>
+        <div class="sheet-grid" id="quizSheetGrid"></div>
+      </div>
+
+      <!-- 单题沉浸做题容器 -->
+      <div id="quizSingleCardContainer" style="display:none;"></div>
+
+      <!-- 连续流式题目列表容器 -->
+      <div class="questions-list" id="quizQuestionsList" style="display:none;"></div>
+
+      <!-- 分页控制栏 (列表模式使用) -->
+      <div class="pagination-bar" id="quizPaginationBar" style="display:none;"></div>
     </section>
 
     <!-- VIEW 4: CLINICAL CASES -->
@@ -413,7 +523,117 @@
     </div>
   </div>
 
+  <!-- Mindmap Node Edit & Image Upload Modal -->
+  <div class="modal-overlay" id="mindmapNodeModal">
+    <div class="modal-box" style="max-width:620px;">
+      <div class="modal-header">
+        <h3 id="modalMmNodeTitle">编辑思维导图知识点与配图</h3>
+        <button class="modal-close" onclick="window.APP.closeMmNodeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">当前考点名称</label>
+          <input type="text" class="form-input" id="mmEditNodeName" disabled style="opacity:0.8;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">我的专属学习笔记 / 记忆口诀 / 解剖补充</label>
+          <textarea class="form-textarea" id="mmEditCustomNotes" placeholder="记录您的解剖学个人心得、手术切口注意、记忆诀窍等..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">添加解剖结构配图 (支持本地图片上传或粘贴图片URL)</label>
+          <div class="img-upload-dropzone" onclick="document.getElementById('mmImgFileInput').click()">
+            <svg class="svg-icon" style="width:24px;height:24px;margin-bottom:0.4rem;color:var(--primary);" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            <div style="font-size:0.85rem; font-weight:600;">点击上传本地解剖图谱 (JPG/PNG/WebP)</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">自动压缩并保存在本地离线存储</div>
+          </div>
+          <input type="file" id="mmImgFileInput" accept="image/*" style="display:none;">
+          <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
+            <input type="text" class="form-input" id="mmImgUrlInput" placeholder="或输入在线图片URL (http://... 或 data:image...)">
+            <button class="btn-nav" id="btnApplyMmImgUrl" style="white-space:nowrap;">应用URL</button>
+          </div>
+          <div class="img-preview-box" id="mmImgPreviewBox" style="display:none;">
+            <img class="img-preview-thumb" id="mmImgPreviewThumb" src="" alt="配图预览">
+            <button class="btn-nav" id="btnRemoveMmImg" style="position:absolute; top:5px; right:5px; background:rgba(0,0,0,0.6); color:#fff; border:none; padding:2px 8px; font-size:0.75rem;">移除图片</button>
+          </div>
+        </div>
+      </div>
+      <div style="padding:1rem 1.5rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; background:var(--bg-subtle);">
+        <button class="btn-nav" id="btnResetMmNode" style="color:var(--danger); border-color:var(--danger-border);">恢复默认</button>
+        <div style="display:flex; gap:0.75rem;">
+          <button class="btn-nav" onclick="window.APP.closeMmNodeModal()">取消</button>
+          <button class="btn-nav" id="btnSaveMmNode" style="background:var(--primary); color:#fff; border-color:var(--primary);">保存修改</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Question Custom Note & Answer Edit Modal -->
+  <div class="modal-overlay" id="questionNoteModal">
+    <div class="modal-box" style="max-width:620px;">
+      <div class="modal-header">
+        <h3 id="modalQNoteTitle">添加/编辑题目答题心得与笔记</h3>
+        <button class="modal-close" onclick="window.APP.closeQNoteModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" id="modalQNoteStem">题目内容</label>
+        </div>
+        <div class="form-group">
+          <label class="form-label">我的解题思路 / 纠错解析 / 笔记</label>
+          <textarea class="form-textarea" id="qNoteContentInput" placeholder="写下您的辨析要点、为什么容易错选该项、或者补充名师解析..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">我的自定义纠错/自拟答案 (选填)</label>
+          <input type="text" class="form-input" id="qNoteCustomAns" placeholder="如：此题人卫十版教材存在新定论，建议选D...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">题目参考附图 (选填)</label>
+          <div class="img-upload-dropzone" onclick="document.getElementById('qImgFileInput').click()">
+            <div style="font-size:0.85rem; font-weight:600;">点击上传考题解析配图</div>
+          </div>
+          <input type="file" id="qImgFileInput" accept="image/*" style="display:none;">
+          <div class="img-preview-box" id="qImgPreviewBox" style="display:none;">
+            <img class="img-preview-thumb" id="qImgPreviewThumb" src="" alt="配图预览">
+            <button class="btn-nav" id="btnRemoveQImg" style="position:absolute; top:5px; right:5px; background:rgba(0,0,0,0.6); color:#fff; border:none; padding:2px 8px; font-size:0.75rem;">移除</button>
+          </div>
+        </div>
+      </div>
+      <div style="padding:1rem 1.5rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; background:var(--bg-subtle);">
+        <button class="btn-nav" id="btnDeleteQNote" style="color:var(--danger); border-color:var(--danger-border);">删除笔记</button>
+        <div style="display:flex; gap:0.75rem;">
+          <button class="btn-nav" onclick="window.APP.closeQNoteModal()">取消</button>
+          <button class="btn-nav" id="btnSaveQNote" style="background:var(--primary); color:#fff; border-color:var(--primary);">保存笔记</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Course Import Modal -->
+  <div class="modal-overlay" id="courseImportModal">
+    <div class="modal-box" style="max-width:560px;">
+      <div class="modal-header">
+        <h3>导入自定义医学课程包 (JSON)</h3>
+        <button class="modal-close" onclick="document.getElementById('courseImportModal').classList.remove('active')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
+          支持导入其他医学院校标准课件 JSON（包含章节、考点闪卡、思维导图、题库与病例）。导入后将自动在顶部学科切换器中呈现。
+        </p>
+        <div class="form-group">
+          <label class="form-label">选择本地课程包文件 (.json)</label>
+          <input type="file" id="coursePkgFileInput" accept=".json" class="form-input">
+        </div>
+      </div>
+      <div style="padding:1rem 1.5rem; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:0.75rem; background:var(--bg-subtle);">
+        <button class="btn-nav" onclick="document.getElementById('courseImportModal').classList.remove('active')">取消</button>
+        <button class="btn-nav" id="btnConfirmImportCourse" style="background:var(--primary); color:#fff; border-color:var(--primary);">确认导入并切换</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Data and Application Scripts (Offline Safe, Zero External Network Required) -->
+  <script src="data/courses.js"></script>
+  <script src="data/biochem_sample.js"></script>
   <script src="data/knowledge.js"></script>
   <script src="data/mindmap.js"></script>
   <script src="data/questions.js"></script>

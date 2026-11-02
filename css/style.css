@@ -1494,3 +1494,470 @@ body {
     max-height: 90vh;
   }
 }
+
+/* ==========================================================================
+   医考帮风格全景答题矩阵、思维导图内嵌展示、用户图文编辑与多学科样式
+   ========================================================================== */
+
+/* Course Selector in Header */
+.course-switcher-wrap {
+  position: relative;
+  display: inline-block;
+  margin-left: 0.75rem;
+}
+.course-select-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.course-select-btn:hover {
+  border-color: var(--primary);
+  background: var(--bg-card);
+}
+.course-dropdown-menu {
+  position: absolute;
+  top: 110%;
+  left: 0;
+  min-width: 260px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.25);
+  z-index: 1000;
+  display: none;
+  overflow: hidden;
+  animation: fadeIn 0.15s ease;
+}
+.course-dropdown-menu.show {
+  display: block;
+}
+.course-opt-item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.course-opt-item:last-child {
+  border-bottom: none;
+}
+.course-opt-item:hover {
+  background: var(--bg-subtle);
+}
+.course-opt-item.active {
+  background: rgba(37, 99, 235, 0.08);
+  border-left: 3px solid var(--primary);
+}
+.course-opt-title {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.course-opt-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+/* 医考帮风格 四行过滤栏 (YiKaoBang 4-Row Filter Bar) */
+.yikao-filter-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.yikao-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.yikao-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 48px;
+  flex-shrink: 0;
+  letter-spacing: 0.05em;
+}
+.yikao-pills {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.yikao-pill {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+  user-select: none;
+}
+.yikao-pill:hover {
+  color: var(--text-main);
+  border-color: var(--text-muted);
+}
+.yikao-pill.active {
+  background: #f43f5e;
+  color: #ffffff;
+  border-color: #f43f5e;
+  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.3);
+}
+.yikao-pill.mode-pill.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+.yikao-pill.subtopic-pill.active {
+  background: #0284c7;
+  border-color: #0284c7;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+}
+
+/* 题库视图切换栏 (View Mode Switcher & Stats Bar) */
+.quiz-mode-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.quiz-view-toggle {
+  display: inline-flex;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem;
+  gap: 0.2rem;
+}
+.quiz-view-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: calc(var(--radius-sm) - 2px);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.quiz-view-btn.active {
+  background: var(--bg-card);
+  color: var(--text-main);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* 医考帮 答题卡矩阵 (Answer Sheet Grid) */
+.answer-sheet-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.sheet-header-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.sheet-legend {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.legend-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+.legend-dot.unanswered { border: 1px solid var(--border); background: var(--bg-subtle); }
+.legend-dot.correct { background: var(--success); }
+.legend-dot.wrong { background: var(--danger); }
+.legend-dot.slashed { background: #8b5cf6; }
+.legend-dot.starred { background: #f59e0b; }
+
+.sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+  gap: 0.6rem;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+.sheet-bubble {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.88rem;
+  font-weight: 700;
+  border: 1.5px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  user-select: none;
+}
+.sheet-bubble:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+}
+.sheet-bubble.correct {
+  background: var(--success);
+  border-color: var(--success);
+  color: #ffffff;
+}
+.sheet-bubble.wrong {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #ffffff;
+}
+.sheet-bubble.slashed {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: #8b5cf6;
+  color: #8b5cf6;
+  text-decoration: line-through;
+}
+.sheet-bubble.active-q {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35);
+  border-color: var(--primary);
+}
+.sheet-star-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  background: #f59e0b;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--bg-card);
+}
+
+/* 斩题按钮样式 (Slash Button) */
+.btn-slash {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-slash:hover {
+  border-color: #8b5cf6;
+  color: #8b5cf6;
+}
+.btn-slash.slashed {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: #8b5cf6;
+  color: #8b5cf6;
+}
+
+/* 用户专属解析与笔记卡片 (Custom Question Notes Box) */
+.user-qnote-box {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: var(--radius-sm);
+  background: rgba(37, 99, 235, 0.05);
+  border: 1px dashed rgba(37, 99, 235, 0.3);
+}
+.user-qnote-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+.user-qnote-text {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-main);
+  white-space: pre-wrap;
+}
+.user-qnote-img {
+  margin-top: 0.75rem;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: zoom-in;
+}
+
+/* 思维导图内嵌展示知识卡片 (Inline Leaf Knowledge Box) */
+.mm-leaf-knowledge-box {
+  margin-top: 0.6rem;
+  margin-left: 1.5rem;
+  padding: 0.9rem 1.1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  animation: fadeIn 0.15s ease;
+}
+.mm-leaf-prompt {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+.mm-leaf-back {
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--text-main);
+  white-space: pre-wrap;
+  margin-bottom: 0.5rem;
+}
+.mm-leaf-mnemonic {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.08);
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem;
+}
+.mm-leaf-custom-notes {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 2px solid #f59e0b;
+  border-radius: 2px;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  white-space: pre-wrap;
+}
+.mm-leaf-img {
+  margin-top: 0.6rem;
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: zoom-in;
+}
+.mm-leaf-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* 单题沉浸模式 (Single Card Quiz View) */
+.single-card-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-top: 1rem;
+}
+
+/* 模态框通用编辑器控件 */
+.form-group {
+  margin-bottom: 1.25rem;
+}
+.form-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+  color: var(--text-main);
+}
+.form-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+.form-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.88rem;
+}
+.img-upload-dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1.25rem;
+  text-align: center;
+  background: var(--bg-subtle);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.img-upload-dropzone:hover {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.04);
+}
+.img-preview-box {
+  margin-top: 0.75rem;
+  text-align: center;
+  position: relative;
+}
+.img-preview-thumb {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
