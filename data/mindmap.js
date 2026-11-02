@@ -1883,3 +1883,9 @@ window.ANATOMY_MINDMAP = {
     }
   ]
 };
+
+
+// 全局别名兼容
+if (typeof window !== 'undefined') {
+  window.MindMapData = window.ANATOMY_MINDMAP;
+}

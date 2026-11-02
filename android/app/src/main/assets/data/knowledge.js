@@ -4184,3 +4184,9 @@ window.ANATOMY_KNOWLEDGE = [
     "clinicalNote": "本知识点为中山大学局部解剖学大纲核心要点，在期末考试及执业医师考试中高频出现。"
   }
 ];
+
+
+// 全局别名兼容
+if (typeof window !== 'undefined') {
+  window.KnowledgeData = window.ANATOMY_KNOWLEDGE;
+}

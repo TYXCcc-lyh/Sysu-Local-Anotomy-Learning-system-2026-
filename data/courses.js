@@ -9,10 +9,10 @@ const CourseManager = {
       shortName: "局解",
       badge: "ANATOMY",
       desc: "高等医学院校教学大纲 · 人卫十版教材 · 考点闪卡 · 全景导图 · 题库测评 · 临床病例",
-      getKnowledge: () => (typeof KnowledgeData !== 'undefined' ? KnowledgeData : []),
-      getMindmap: () => (typeof MindMapData !== 'undefined' ? MindMapData : {}),
-      getQuestions: () => (typeof QuestionsData !== 'undefined' ? QuestionsData : []),
-      getCases: () => (typeof CasesData !== 'undefined' ? CasesData : [])
+      getKnowledge: () => (window.ANATOMY_KNOWLEDGE || (typeof KnowledgeData !== 'undefined' ? KnowledgeData : [])),
+      getMindmap: () => (window.ANATOMY_MINDMAP || (typeof MindMapData !== 'undefined' ? MindMapData : {})),
+      getQuestions: () => (window.ANATOMY_QUESTIONS || (typeof QuestionsData !== 'undefined' ? QuestionsData : [])),
+      getCases: () => (window.ANATOMY_CASES || (typeof CasesData !== 'undefined' ? CasesData : []))
     },
     biochem: {
       id: "biochem",
@@ -73,5 +73,9 @@ const CourseManager = {
 };
 
 CourseManager.init();
+
+if (typeof window !== 'undefined') {
+  window.CourseManager = CourseManager;
+}
 
 if (typeof module !== 'undefined') module.exports = CourseManager;

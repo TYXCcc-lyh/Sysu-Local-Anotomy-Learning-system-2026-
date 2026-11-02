@@ -166,4 +166,7 @@ const BiochemCourseData = {
   ]
 };
 
+if (typeof window !== 'undefined') {
+  window.BiochemCourseData = BiochemCourseData;
+}
 if (typeof module !== 'undefined') module.exports = BiochemCourseData;

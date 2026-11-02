@@ -102,26 +102,38 @@
   // Dynamic Data Accessors
   function getKnowledgeData() {
     const c = (typeof CourseManager !== 'undefined') ? CourseManager.getCurrentCourse() : null;
-    if (c && typeof c.getKnowledge === 'function') return c.getKnowledge();
+    if (c && typeof c.getKnowledge === 'function') {
+      const data = c.getKnowledge();
+      if (data && data.length) return data;
+    }
     return window.ANATOMY_KNOWLEDGE || (typeof KnowledgeData !== 'undefined' ? KnowledgeData : []);
   }
 
   function getQuestionsData() {
     const c = (typeof CourseManager !== 'undefined') ? CourseManager.getCurrentCourse() : null;
-    if (c && typeof c.getQuestions === 'function') return c.getQuestions();
+    if (c && typeof c.getQuestions === 'function') {
+      const data = c.getQuestions();
+      if (data && data.length) return data;
+    }
     return window.ANATOMY_QUESTIONS || (typeof QuestionsData !== 'undefined' ? QuestionsData : []);
   }
 
   function getCasesData() {
     const c = (typeof CourseManager !== 'undefined') ? CourseManager.getCurrentCourse() : null;
-    if (c && typeof c.getCases === 'function') return c.getCases();
+    if (c && typeof c.getCases === 'function') {
+      const data = c.getCases();
+      if (data && data.length) return data;
+    }
     return window.ANATOMY_CASES || (typeof CasesData !== 'undefined' ? CasesData : []);
   }
 
   function getMindMapData() {
     const c = (typeof CourseManager !== 'undefined') ? CourseManager.getCurrentCourse() : null;
-    if (c && typeof c.getMindmap === 'function') return c.getMindmap();
-    return window.ANATOMY_MINDMAP || (typeof MindMapData !== 'undefined' ? MindMapData : null);
+    if (c && typeof c.getMindmap === 'function') {
+      const data = c.getMindmap();
+      if (data && (data.name || (data.children && data.children.length))) return data;
+    }
+    return window.ANATOMY_MINDMAP || (typeof MindMapData !== 'undefined' ? MindMapData : {});
   }
 
   // SVG Icon definitions
@@ -728,11 +740,13 @@
 
     if (dom.ankiClinicalBox && dom.ankiClinicalText) {
       let extraHtml = '';
-      if (card.mnemonic) {
-        extraHtml += `<div style="margin-bottom:0.4rem;"><span style="color:#059669; font-weight:700;">【记忆口诀】</span> ${escapeHtml(card.mnemonic)}</div>`;
+      const mText = card.mnemonic || (card.back && card.back.includes('【记忆口诀】：') ? card.back.split('【记忆口诀】：')[1].split('\n')[0] : '');
+      const cText = card.clinical || card.clinicalNote || '';
+      if (mText) {
+        extraHtml += `<div style="margin-bottom:0.4rem;"><span style="color:#059669; font-weight:700;">【记忆口诀】</span> ${escapeHtml(mText)}</div>`;
       }
-      if (card.clinical) {
-        extraHtml += `<div style="margin-bottom:0.4rem;">${escapeHtml(card.clinical)}</div>`;
+      if (cText) {
+        extraHtml += `<div style="margin-bottom:0.4rem;"><span style="color:var(--primary); font-weight:700;">【临床要点】</span> ${escapeHtml(cText)}</div>`;
       }
       extraHtml += customHtml;
       if (extraHtml) {
@@ -1660,12 +1674,14 @@
     }
 
     if (state.searchQuery) {
-      const q = state.searchQuery;
-      list = list.filter(c => 
-        (c.title && c.title.toLowerCase().includes(q)) ||
-        (c.summary && c.summary.toLowerCase().includes(q)) ||
-        (c.question && c.question.toLowerCase().includes(q))
-      );
+      const q = state.searchQuery.toLowerCase();
+      list = list.filter(c => {
+        const scenario = (c.scenario || c.summary || '').toLowerCase();
+        const questionsStr = Array.isArray(c.questions) ? c.questions.join(' ').toLowerCase() : (c.question || '').toLowerCase();
+        return (c.title && c.title.toLowerCase().includes(q)) ||
+               scenario.includes(q) ||
+               questionsStr.includes(q);
+      });
     }
 
     if (dom.casesStatsBadge) dom.casesStatsBadge.textContent = `共 ${list.length} 个病例`;
@@ -1677,11 +1693,27 @@
 
     dom.casesList.innerHTML = list.map((c, i) => {
       const isStarred = store.starredCases.includes(c.id);
+      const scenarioText = c.scenario || c.summary || '';
+      
+      let questionsHtml = '';
+      if (Array.isArray(c.questions)) {
+        questionsHtml = c.questions.map(q => `<div style="margin-bottom:0.35rem; line-height:1.5;">${escapeHtml(q)}</div>`).join('');
+      } else {
+        questionsHtml = escapeHtml(c.question || '');
+      }
+
+      let answersHtml = '';
+      if (Array.isArray(c.answers)) {
+        answersHtml = c.answers.map(a => `<div style="margin-bottom:0.75rem; line-height:1.65;">${escapeHtml(a)}</div>`).join('');
+      } else {
+        answersHtml = escapeHtml(c.answer || '');
+      }
+
       return `
         <div class="case-card" id="case-${c.id}">
           <div class="case-header">
             <div>
-              <div class="case-number">${escapeHtml(c.chapter)} · 病例 #${i + 1}</div>
+              <div class="case-number">${escapeHtml(c.chapter)} · ${c.caseNum || ('病例 #' + (i + 1))}</div>
               <h3 class="case-title">${escapeHtml(c.title)}</h3>
             </div>
             <button class="star-btn ${isStarred ? 'active' : ''}" onclick="window.APP.toggleStarCase('${c.id}')" title="收藏病例">
@@ -1689,16 +1721,29 @@
             </button>
           </div>
           <div class="case-body">
+            ${c.diagnosis ? `
+              <div style="margin-bottom:0.6rem; font-size:0.86rem;">
+                <strong style="color:var(--primary);">【临床诊断】：</strong>
+                <span style="font-weight:600;">${escapeHtml(c.diagnosis)}</span>
+              </div>
+            ` : ''}
             <div style="font-weight:700; color:var(--primary); font-size:0.85rem; margin-bottom:0.35rem;">【病史与临床体征】：</div>
-            <div class="case-summary">${escapeHtml(c.summary)}</div>
+            <div class="case-summary">${escapeHtml(scenarioText)}</div>
             <div class="case-question">
-              <strong>【解剖学思考题】：</strong><br>${escapeHtml(c.question)}
+              <strong style="color:var(--text-main);">【解剖学思考题】：</strong><br>
+              <div style="margin-top:0.35rem;">${questionsHtml}</div>
             </div>
             <button class="btn-toggle-answer" onclick="window.APP.toggleCaseAnswer('${c.id}')">
-              展开权威解剖学答案与机制解析
+              展开权威解剖学机制与思考题详解
             </button>
             <div class="case-answer-box" id="case-ans-${c.id}">
-              ${escapeHtml(c.answer)}
+              <div style="margin-bottom:0.5rem; font-weight:700; color:var(--success);">【权威解剖学思考题详解】：</div>
+              ${answersHtml}
+              ${c.clinicalPearl ? `
+                <div style="margin-top:0.75rem; padding:0.6rem 0.85rem; background:rgba(16,185,129,0.08); border-left:3px solid #10b981; border-radius:4px; font-size:0.84rem; color:#065f46; line-height:1.55;">
+                  <strong>【临床要点提炼】：</strong>${escapeHtml(c.clinicalPearl)}
+                </div>
+              ` : ''}
             </div>
           </div>
         </div>
@@ -1860,6 +1905,7 @@
   window.APP = {
     // Nav & Course
     switchCourse: switchActiveCourse,
+    switchView: renderView,
     
     // Quiz Actions (医考帮架构)
     jumpToQuestionIndex: (idx) => {

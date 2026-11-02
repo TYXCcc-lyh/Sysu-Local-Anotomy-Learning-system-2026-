@@ -38040,4 +38040,8 @@ const QuestionsData = [
     "subTopic": "背部（脊柱区）综合要点"
   }
 ];
+if (typeof window !== 'undefined') {
+  window.ANATOMY_QUESTIONS = QuestionsData;
+  window.QuestionsData = QuestionsData;
+}
 if (typeof module !== 'undefined') module.exports = QuestionsData;

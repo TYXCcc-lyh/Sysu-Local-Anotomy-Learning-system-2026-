@@ -2404,3 +2404,9 @@ window.ANATOMY_CASES = [
     "diagnosis": "外阴鳞状细胞癌沿淋巴管转移至腹股沟浅深淋巴结"
   }
 ];
+
+
+// 全局别名兼容
+if (typeof window !== 'undefined') {
+  window.CasesData = window.ANATOMY_CASES;
+}
